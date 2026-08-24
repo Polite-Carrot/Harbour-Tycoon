@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, type AppStateStatus } from 'react-native';
+import { AppState, Platform, type AppStateStatus } from 'react-native';
 import { BALANCE, type UpgradeId } from '../config/balance';
 import { buyUpgrade, catchUp, createNewGame } from '../sim/engine';
 import type { GameState, OfflineReport } from '../sim/types';
@@ -102,6 +102,27 @@ export function useGame() {
       sub.remove();
       // Unmount is also a quit path.
       if (stateRef.current) void saveGame(stateRef.current);
+    };
+  }, [ready, settle]);
+
+  // --- web: tabs close without an AppState transition -----------------------
+  // On native, backgrounding is the reliable save point. In a browser a tab can
+  // be closed outright, so hook the page lifecycle too or the player loses up
+  // to one autosave interval. localStorage writes land synchronously, so this
+  // still completes during unload.
+  useEffect(() => {
+    if (!ready || Platform.OS !== 'web') return;
+
+    const flush = () => {
+      settle(Date.now(), false);
+      if (stateRef.current) void saveGame(stateRef.current);
+    };
+
+    window.addEventListener('pagehide', flush);
+    window.addEventListener('beforeunload', flush);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      window.removeEventListener('beforeunload', flush);
     };
   }, [ready, settle]);
 

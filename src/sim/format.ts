@@ -29,8 +29,8 @@ export function formatDuration(seconds: number): string {
   const m = Math.floor((s % 3600) / 60);
   const sec = s % 60;
 
-  if (h > 0) return `${h}h ${m}m`;
-  if (m > 0) return `${m}m ${sec}s`;
+  if (h > 0) return m > 0 ? `${h}h ${m}m` : `${h}h`;
+  if (m > 0) return sec > 0 ? `${m}m ${sec}s` : `${m}m`;
   return `${sec}s`;
 }
 

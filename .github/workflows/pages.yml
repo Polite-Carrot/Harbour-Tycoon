@@ -1,0 +1,59 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Let a running deploy finish; queue at most one more behind it.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Don't ship a build that fails its own checks.
+      - run: npm run typecheck
+      - run: npm test
+
+      - name: Build web bundle
+        run: npm run build:web
+        env:
+          # Project Pages sites live at /<repo>/, so every asset URL needs that
+          # prefix. Derived from the repo name rather than hardcoded, so a fork
+          # or a rename still builds correctly.
+          PAGES_BASE_URL: /${{ github.event.repository.name }}
+
+      # Without this, Pages runs Jekyll, which silently drops _expo/ and the
+      # whole bundle 404s.
+      - run: touch dist/.nojekyll
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

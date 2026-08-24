@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { BALANCE } from '../../config/balance';
 import { advance, buyUpgrade, catchUp, createNewGame, sanitise } from '../engine';
 import { cumulativeCost, deriveStats, upgradeCost } from '../economy';
+import { formatDuration, formatMoney } from '../format';
 import type { GameState } from '../types';
 
 const fresh = (): GameState => createNewGame(0, BALANCE);
@@ -190,5 +191,21 @@ describe('save sanitising', () => {
   it('clamps levels above maxLevel from a tampered save', () => {
     const restored = sanitise({ upgrades: { cranes: 9999 } }, 1000, BALANCE)!;
     expect(restored.upgrades.cranes).toBe(BALANCE.upgrades.cranes.maxLevel);
+  });
+});
+
+describe('formatting', () => {
+  it('drops empty trailing units in durations', () => {
+    expect(formatDuration(4 * 3600)).toBe('4h');
+    expect(formatDuration(2 * 3600 + 30 * 60)).toBe('2h 30m');
+    expect(formatDuration(120)).toBe('2m');
+    expect(formatDuration(95)).toBe('1m 35s');
+    expect(formatDuration(9)).toBe('9s');
+  });
+
+  it('scales big numbers with suffixes', () => {
+    expect(formatMoney(5760)).toBe('5.76K');
+    expect(formatMoney(11520)).toBe('11.5K');
+    expect(formatMoney(1.54e11)).toBe('154B');
   });
 });

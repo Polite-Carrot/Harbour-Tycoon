@@ -10,13 +10,42 @@ save/load, and offline earnings on resume. The UI is deliberately plain.
 ```bash
 npm install
 npm start          # then scan the QR code with Expo Go
+npm run web        # or play it in a browser
 ```
 
 ```bash
 npm test           # sim + balance regression tests
 npm run typecheck
 npm run balance    # economy tuning report (see below)
+npm run build:web  # static web bundle into dist/
 ```
+
+## Playing it on GitHub Pages
+
+Pushing to `main` builds and deploys automatically
+(`.github/workflows/pages.yml`). It runs typecheck and tests first, so a broken
+build never reaches the site.
+
+**One-time setup:** repo Settings -> Pages -> Source -> **GitHub Actions**.
+Not "Deploy from a branch" — the site is built, not committed.
+
+The site lands at `https://polite-carrot.github.io/Harbour-Tycoon/`.
+
+Two things about that URL are load-bearing:
+
+- **It is a subpath, not a root.** Expo's web export writes absolute asset
+  URLs (`/_expo/static/...`), which 404 under `/Harbour-Tycoon/`. The workflow
+  sets `PAGES_BASE_URL` and `app.config.ts` feeds it to `experiments.baseUrl`
+  so every URL is rewritten. The var is derived from the repo name, so a fork
+  or a rename still builds. Locally it is empty, so dev still serves from root.
+- **`.nojekyll` is required.** Pages otherwise runs Jekyll, which drops
+  underscore-prefixed directories — silently deleting the entire `_expo/`
+  bundle and leaving a blank page.
+
+Saves use `localStorage` on web, so progress is per-browser and does not follow
+you between devices. Closing a tab is handled: `pagehide`/`beforeunload` flush
+a save, since a browser tab can close without the `AppState` transition that
+native relies on.
 
 ## Where things live
 
@@ -131,3 +160,5 @@ multiplier would be applied.
   and nothing to overflow.
 - Cranes stop being worth buying at level 30 by design. Nothing in the UI says
   so yet beyond the `MAX` label.
+- Web saves live in `localStorage`, so clearing site data wipes the port and
+  progress does not sync across devices.
