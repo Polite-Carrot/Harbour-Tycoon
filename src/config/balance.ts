@@ -138,6 +138,25 @@ export const BALANCE: BalanceConfig = {
     // asserted to run cheapest-first so the expensive tracks stay on the
     // right. Sorting by live cost instead would reshuffle tiles under the
     // player's thumb as levels grow.
+    //
+    // ---- THE VALUE LADDER -------------------------------------------------
+    // A dearer track must BUY MORE. Measured on a fresh port, the income
+    // multiplier from one level must rise with base cost:
+    //
+    //   cranes 1.037 < shipSize 1.05 < contracts 1.06
+    //     < tugboats 1.080 < floodlights 1.10 < customs 1.13
+    //
+    // `balance.test.ts` asserts that ordering. Two things make it awkward, and
+    // both are why this was wrong before:
+    //
+    //  - TIMING tracks (cranes, tugboats) are bounded by the cycle floors, so
+    //    they can never sit high on the ladder. They belong at the cheap end.
+    //    Floodlights used to be one and was badly overpriced for it.
+    //  - effectPerLevel must stay BELOW that track's costGrowth, or the track
+    //    accelerates within itself and every level gets bought at once. That
+    //    ceiling (~1.15) is why per-level effects cannot scale freely with
+    //    price; deeper CAPS are what let a dear track be worth more overall.
+    // ----------------------------------------------------------------------
 
     // Cranes cut unload time. Effect is multiplicative and floors out at
     // minUnloadSeconds, so cranes deliberately stop being worth buying past
@@ -159,7 +178,7 @@ export const BALANCE: BalanceConfig = {
       blurb: 'More cargo on every ship',
       baseCost: 45,
       costGrowth: 1.15,
-      effectPerLevel: 1.08,
+      effectPerLevel: 1.05,
       maxLevel: null,
     },
 
@@ -173,6 +192,7 @@ export const BALANCE: BalanceConfig = {
       costGrowth: 1.15,
       effectPerLevel: 1.06,
       maxLevel: null,
+      // NOTE: 1.05 * 1.06 = 1.113, comfortably under the 1.15 budget.
     },
 
     // Tugboats work the OTHER half of the cycle: the dead time before a ship
@@ -184,37 +204,40 @@ export const BALANCE: BalanceConfig = {
       blurb: 'Ships reach the berth sooner',
       baseCost: 900,
       costGrowth: 1.14,
-      effectPerLevel: 0.93,
-      // Capped near where arrival hits minArrivalSeconds, so the track does
-      // not spend its last levels doing nothing. Floodlights also shorten
-      // arrival, so the exact dead point moves — the carousel disables any
-      // track whose next level would add no income, which covers the rest.
-      maxLevel: 12,
+      effectPerLevel: 0.815,
+      // Capped where arrival reaches minArrivalSeconds: 4 * 0.815^7 ~= 0.94,
+      // already under the 1s floor. Beyond this the track would sell levels
+      // that do nothing.
+      maxLevel: 7,
     },
 
-    // Floodlights shorten the whole cycle — both arrival and unloading — so
-    // they stack with cranes and tugboats rather than duplicating either.
+    // Floodlights were a third timing track, which made them weak: the cycle
+    // floors cap what any timing upgrade can ever be worth, and a $12K tile
+    // that bought +3% was strictly worse value than a $45 one buying +5%.
+    // They are now a yield multiplier, which lets the effect sit where the
+    // price says it should on the ladder.
     floodlights: {
       id: 'floodlights',
       name: 'Floodlights',
-      blurb: 'Run the port around the clock',
+      blurb: 'Night crews work the cargo',
       baseCost: 12_000,
       costGrowth: 1.13,
-      effectPerLevel: 0.97,
-      maxLevel: 20,
+      effectPerLevel: 1.1,
+      maxLevel: 25,
     },
 
-    // Customs House is a second price multiplier at a much higher price tier.
-    // Mechanically it is Contracts again; what differs is the cost curve and
-    // the cap, which is the usual idle-game shape for a late-game money sink.
+    // Customs House is the most expensive track, so it has the biggest effect
+    // per level and the deepest cap. costGrowth must stay above effectPerLevel
+    // or the track accelerates within itself and the player buys every level
+    // in one burst.
     customs: {
       id: 'customs',
       name: 'Customs House',
       blurb: 'Clear cargo at a premium',
       baseCost: 250_000,
-      costGrowth: 1.12,
-      effectPerLevel: 1.1,
-      maxLevel: 15,
+      costGrowth: 1.15,
+      effectPerLevel: 1.13,
+      maxLevel: 40,
     },
   },
 

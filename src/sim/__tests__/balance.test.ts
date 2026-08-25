@@ -73,6 +73,35 @@ describe('the buy carousel', () => {
     }
   });
 
+  it('makes a dearer track buy more — the value ladder', () => {
+    // The complaint this encodes: paying $250K for the same effect a $75 tile
+    // gives. Measured on a fresh port, one level of each track must multiply
+    // income by MORE as base cost rises. Without this, expensive tracks are
+    // strictly worse value and an optimal player never touches them.
+    const fresh = createNewGame(0, BALANCE);
+    const base = totalIncome(fresh, BALANCE);
+
+    const gains = UPGRADE_ORDER.map(
+      (id) => incomeAfterBuying(fresh, id, 1, 0, BALANCE) / base,
+    );
+
+    for (let i = 1; i < gains.length; i++) {
+      expect(gains[i]).toBeGreaterThan(gains[i - 1]);
+    }
+    // And every one of them is actually worth something.
+    for (const g of gains) expect(g).toBeGreaterThan(1);
+  });
+
+  it('never lets a track accelerate within itself', () => {
+    // effectPerLevel must stay under that track's own costGrowth. Above it,
+    // each level is better value than the last and the player buys the whole
+    // track in one burst the moment they can afford the first level.
+    for (const id of UPGRADE_ORDER) {
+      const u = BALANCE.upgrades[id];
+      if (u.effectPerLevel > 1) expect(u.effectPerLevel).toBeLessThan(u.costGrowth);
+    }
+  });
+
   it('has a config entry for every id, with its own id set correctly', () => {
     for (const id of UPGRADE_ORDER) {
       expect(BALANCE.upgrades[id]).toBeDefined();
@@ -126,7 +155,11 @@ describe('the stability rule', () => {
       (acc, u) => acc * Math.pow(u.effectPerLevel, u.maxLevel!),
       1,
     );
-    expect(totalMultiplier).toBeLessThan(100);
+    // A tripwire, not a design limit: capped tracks are safe at any size, but
+    // a cap bump should not silently change the economy by orders of
+    // magnitude without someone seeing this fail.
+    expect(totalMultiplier).toBeGreaterThan(100);
+    expect(totalMultiplier).toBeLessThan(20_000);
   });
 });
 
@@ -151,12 +184,15 @@ describe('the new upgrade tracks', () => {
     expect(stats.moneyPerSecond).toBeGreaterThan(before.moneyPerSecond);
   });
 
-  it('floodlights shorten both halves of the cycle', () => {
+  it('floodlights multiply yield without touching the cycle', () => {
+    // They used to be a third timing track, which the cycle floors kept weak
+    // and badly overpriced for their tile.
     const before = derivePortStats(rich().ports[0], 0, BALANCE);
     const stats = derivePortStats(atLevels({ floodlights: 5 }).ports[0], 0, BALANCE);
 
-    expect(stats.arrivalSeconds).toBeLessThan(before.arrivalSeconds);
-    expect(stats.unloadSeconds).toBeLessThan(before.unloadSeconds);
+    expect(stats.cycleSeconds).toBeCloseTo(before.cycleSeconds, 9);
+    expect(stats.yieldMultiplier).toBeGreaterThan(before.yieldMultiplier);
+    expect(stats.moneyPerShip).toBeGreaterThan(before.moneyPerShip);
   });
 
   it('customs raises the price per unit', () => {
@@ -170,7 +206,7 @@ describe('the new upgrade tracks', () => {
   it('reports zero marginal gain once a timing track is pinned to its floor', () => {
     // This is what the carousel keys off to grey a track out. Without it the
     // player can keep paying for tugboats long after arrival has floored.
-    const floored = atLevels({ tugboats: 12, floodlights: 20, cranes: 30 });
+    const floored = atLevels({ tugboats: BALANCE.upgrades.tugboats.maxLevel!, cranes: 30 });
     const stats = derivePortStats(floored.ports[0], 0, BALANCE);
     expect(stats.arrivalSeconds).toBe(BALANCE.berth.minArrivalSeconds);
 
@@ -188,7 +224,7 @@ describe('the new upgrade tracks', () => {
 
   it('keeps the cycle above its floors however maxed the timing tracks are', () => {
     let s = rich();
-    for (const id of ['cranes', 'tugboats', 'floodlights'] as const) {
+    for (const id of ['cranes', 'tugboats'] as const) {
       s = buyUpgrade(s, id, 'max', 0, BALANCE).state;
     }
     const stats = derivePortStats(s.ports[0], 0, BALANCE);

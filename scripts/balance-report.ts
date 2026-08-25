@@ -12,7 +12,7 @@
  *
  * Tune balance.ts, re-run this, read the table. No game logic is touched.
  */
-import { BALANCE } from '../src/config/balance';
+import { BALANCE, UPGRADE_ORDER } from '../src/config/balance';
 import { advance, buyPort, buyUpgrade, createNewGame } from '../src/sim/engine';
 import { derivePortStats, portCost, portName, totalIncome, upgradeCost } from '../src/sim/economy';
 import { bestBuy } from '../src/sim/policy';
@@ -185,12 +185,23 @@ function report(
   }
 
   console.log(`\nAfter ${(HORIZON_SECONDS / 3600).toFixed(0)} hours of active play`);
+  console.log(`  ${padEnd('port', 16)}${UPGRADE_ORDER.map((id) => pad(id.slice(0, 6), 8)).join('')}${pad('income', 13)}`);
   state.ports.forEach((p, i) => {
     const s = derivePortStats(p, i, BALANCE);
-    console.log(`  ${padEnd(portName(i, BALANCE), 16)} cranes ${pad(p.upgrades.cranes, 3)} | ` +
-      `ship ${pad(p.upgrades.shipSize, 4)} | contracts ${pad(p.upgrades.contracts, 4)} | ` +
-      `${formatMoney(s.moneyPerSecond)}/s`);
+    console.log(`  ${padEnd(portName(i, BALANCE), 16)}` +
+      UPGRADE_ORDER.map((id) => pad(p.upgrades[id], 8)).join('') +
+      pad(formatMoney(s.moneyPerSecond) + '/s', 13));
   });
+
+  // Which tracks the optimal player actually touches. A track with zero
+  // purchases is dead content, however good it looks in the carousel.
+  console.log('\nPurchases by track (a zero here means the track is never worth buying)');
+  for (const id of UPGRADE_ORDER) {
+    const n = purchases.filter((p) => p.label.startsWith(id)).length;
+    const first = purchases.find((p) => p.label.startsWith(id));
+    console.log(`  ${padEnd(id, 14)}${pad(n, 6)} bought` +
+      (first ? `   first at ${(first.atSeconds / 60).toFixed(0)}m` : '   NEVER BOUGHT'));
+  }
   console.log(`  purchases       ${purchases.length}`);
   console.log(`  income          ${formatMoney(totalIncome(state, BALANCE))}/s`);
   console.log(`  lifetime        ${formatMoney(state.lifetimeEarnings)}`);

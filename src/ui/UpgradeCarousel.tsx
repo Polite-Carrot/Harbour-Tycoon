@@ -1,6 +1,7 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { BALANCE, type UpgradeId } from '../config/balance';
-import { formatMoney, formatRate } from '../sim/format';
+import { paybackSeconds } from '../sim/economy';
+import { formatDuration, formatMoney, formatRate } from '../sim/format';
 import type { BuyQuantity, UpgradeAffordability } from '../sim/types';
 import { theme } from './theme';
 
@@ -60,6 +61,7 @@ export function UpgradeCarousel({ entries, gains, quantity, onQuantity, onBuy }:
           // buy but adds nothing. Never invite the player to spend on that.
           const dead = !entry.maxed && gain <= 0;
           const enabled = entry.affordable && !entry.maxed && !dead;
+          const payback = paybackSeconds(entry.cost, gain);
 
           return (
             <Pressable
@@ -93,6 +95,12 @@ export function UpgradeCarousel({ entries, gains, quantity, onQuantity, onBuy }:
                       ? 'no further effect'
                       : `+${formatRate(gain)}`}
                 </Text>
+
+                {!entry.maxed && !dead && Number.isFinite(payback) && (
+                  <Text style={styles.payback} numberOfLines={1}>
+                    pays back {payback < 1 ? '<1s' : formatDuration(payback)}
+                  </Text>
+                )}
 
                 <View style={[styles.costPill, enabled && styles.costPillReady]}>
                   {entry.maxed || dead ? (
@@ -164,6 +172,7 @@ const styles = StyleSheet.create({
   tileLevel: { color: theme.textDim, fontSize: 11, fontWeight: '600' },
   tileBlurb: { color: theme.disabled, fontSize: 10, marginTop: 3, lineHeight: 13 },
   tileGain: { color: theme.good, fontSize: 11, fontWeight: '700' },
+  payback: { color: theme.textDim, fontSize: 10, marginTop: 1 },
   tileGainOff: { color: theme.disabled },
 
   costPill: {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BALANCE, UPGRADE_ORDER } from '../../config/balance';
 import { advance, buyPort, buyUpgrade, createNewGame } from '../engine';
-import { derivePortStats, portName, totalIncome } from '../economy';
+import { derivePortStats, paybackSeconds, portName, totalIncome } from '../economy';
 import { gameStats } from '../stats';
 import type { GameState } from '../types';
 
@@ -78,5 +78,26 @@ describe('settings stats', () => {
     for (const v of [s.income, s.totalLevels, s.shipsPerMinute, s.offlineWindowValue]) {
       expect(Number.isFinite(v)).toBe(true);
     }
+  });
+});
+
+describe('payback time', () => {
+  it('is cost divided by the income it buys', () => {
+    expect(paybackSeconds(1000, 10)).toBe(100);
+    expect(paybackSeconds(250_000, 185)).toBeCloseTo(1351.35, 2);
+  });
+
+  it('ranks a dear-but-strong upgrade against a cheap-but-weak one', () => {
+    // The comparison the carousel exists to make legible.
+    const dear = paybackSeconds(250_000, 185);
+    const cheap = paybackSeconds(15_200, 101);
+    expect(cheap).toBeLessThan(dear);
+  });
+
+  it('is infinite for anything that buys nothing', () => {
+    expect(paybackSeconds(1000, 0)).toBe(Infinity);
+    expect(paybackSeconds(1000, -5)).toBe(Infinity);
+    expect(paybackSeconds(Infinity, 10)).toBe(Infinity);
+    expect(paybackSeconds(0, 10)).toBe(Infinity);
   });
 });

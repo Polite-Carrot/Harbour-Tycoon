@@ -132,24 +132,59 @@ exponentially as you level, so a live sort would reshuffle tiles between taps
 and you would buy the wrong thing. A test asserts the base costs stay
 ascending, which makes that ordering the UI's contract.
 
-| track | base cost | effect | cap |
-|---|---|---|---|
-| Cranes | $30 | unload faster | 30 |
-| Ship Size | $45 | more cargo per ship | — |
-| Contracts | $75 | better price per unit | — |
-| Tugboats | $900 | ships reach the berth sooner | 12 |
-| Floodlights | $12K | shortens the *whole* cycle | 20 |
-| Customs House | $250K | another price multiplier | 15 |
+### The value ladder
 
-Every track added after the original three is **capped**, and that is forced,
-not stylistic: the uncapped budget is nearly spent (1.08 x 1.06 = 1.1448 against
-a 1.15 ceiling). A capped track terminates, contributing a bounded one-off
-multiplier, so it cannot compound into a runaway. Any new uncapped track would
-have to come out of that budget.
+**A dearer track must buy more.** Measured on a fresh port, one level of each
+track multiplies income by more as base cost rises:
 
-Tugboats are the one genuinely new axis — nothing else touched the arrival
-phase. Customs House is Contracts again at a higher price tier, which is the
-normal idle-game shape for a late money sink.
+| track | base cost | effect | fresh-port gain | cap |
+|---|---|---|---|---|
+| Cranes | $30 | unload faster | x1.037 | 30 |
+| Ship Size | $45 | more cargo per ship | x1.05 | — |
+| Contracts | $75 | better price per unit | x1.06 | — |
+| Tugboats | $900 | ships reach the berth sooner | x1.080 | 7 |
+| Floodlights | $12K | multiplies what a ship is worth | x1.10 | 25 |
+| Customs House | $250K | biggest price multiplier | x1.13 | 40 |
+
+`balance.test.ts` asserts that ordering. It was wrong before, in two ways worth
+knowing about if this is ever retuned:
+
+- **Contracts cost more than Ship Size and did less** ($75 for +6% against $45
+  for +8%) — a plain inversion.
+- **The expensive tracks were irrelevant.** `npm run balance` now tallies
+  purchases per track, which is how this was caught: over eight hours the old
+  tune bought `shipSize` 3454 times but `customs` exactly 75 — 15 levels on
+  each of 5 ports, then never again. Their whole lifetime contribution was
+  `1.10^15 = 4.2x` against shipSize's `1.08^726 ~ 10^24`. Retuned, customs is
+  bought 200 times and the capped tracks together are worth ~1400x.
+
+Two constraints shape what is possible here:
+
+- **`effectPerLevel` must stay below that track's own `costGrowth`** (~1.15),
+  or each level is better value than the last and the whole track gets bought
+  in one burst. So per-level effects *cannot* scale freely with price — deeper
+  **caps** are what let a dear track be worth more overall.
+- **Timing tracks are bounded by the cycle floors**, so they can never sit high
+  on the ladder and belong at the cheap end. Floodlights used to be one, which
+  is why a $12K tile was buying less than a $45 one; it is now a yield
+  multiplier.
+
+### Payback time
+
+Every tile shows how long a purchase takes to repay itself (`cost / income
+gained`). Price alone does not compare two tiles — a $250K upgrade buying
++$185/s and a $15K one buying +$101/s look similar until you see one repays in
+22 minutes and the other in 2.5.
+
+Note the carousel is ordered by **base** cost, which is stable. Once tracks are
+levelled unevenly their *current* prices will not be in order; payback is the
+signal to read instead.
+
+Every track after the original three is **capped**, and that is forced, not
+stylistic: the uncapped budget is 1.05 x 1.06 = 1.113 against a 1.15 ceiling.
+A capped track terminates, contributing a bounded one-off multiplier, so it
+cannot compound into a runaway. Any new uncapped track would have to come out
+of that budget.
 
 A track pinned against a floor (arrival or unload) has levels left but adds
 nothing. The carousel greys those out as **CAPPED / no further effect** rather

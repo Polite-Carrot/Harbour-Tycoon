@@ -43,6 +43,8 @@ export interface DerivedStats {
   cargoPerShip: number;
   pricePerUnit: number;
   moneyPerShip: number;
+  /** Flat multiplier on what a ship is worth (floodlights). */
+  yieldMultiplier: number;
   /** Long-run average income for this port, i.e. moneyPerShip / cycleSeconds. */
   moneyPerSecond: number;
   /** The tier multiplier applied to this port's yields and upgrade costs. */

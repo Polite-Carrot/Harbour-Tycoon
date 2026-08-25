@@ -146,20 +146,22 @@ export function derivePortStats(
   const lv = port.upgrades;
   const scale = portScale(portIndex, cfg);
 
-  // Floodlights shorten the whole cycle, so they apply to both phases.
-  const shift = Math.pow(upgrades.floodlights.effectPerLevel, lv.floodlights);
-
   // Cranes work the unload phase; tugboats work the arrival phase. Both floor
-  // out, which is what stops either track running the cycle down to zero.
+  // out, which is what stops either track running the cycle down to zero — and
+  // is also why timing tracks sit at the cheap end of the value ladder.
   const unloadSeconds = Math.max(
     berth.minUnloadSeconds,
-    berth.baseUnloadSeconds * Math.pow(upgrades.cranes.effectPerLevel, lv.cranes) * shift,
+    berth.baseUnloadSeconds * Math.pow(upgrades.cranes.effectPerLevel, lv.cranes),
   );
 
   const arrivalSeconds = Math.max(
     berth.minArrivalSeconds,
-    berth.baseArrivalSeconds * Math.pow(upgrades.tugboats.effectPerLevel, lv.tugboats) * shift,
+    berth.baseArrivalSeconds * Math.pow(upgrades.tugboats.effectPerLevel, lv.tugboats),
   );
+
+  // Floodlights multiply what each ship is worth. Not bound by the cycle
+  // floors, so the effect can sit where its price says it should.
+  const yieldMultiplier = Math.pow(upgrades.floodlights.effectPerLevel, lv.floodlights);
 
   const cargoPerShip =
     cargo.baseUnitsPerShip * Math.pow(upgrades.shipSize.effectPerLevel, lv.shipSize);
@@ -171,7 +173,7 @@ export function derivePortStats(
     scale;
 
   const cycleSeconds = arrivalSeconds + unloadSeconds;
-  const moneyPerShip = cargoPerShip * pricePerUnit;
+  const moneyPerShip = cargoPerShip * pricePerUnit * yieldMultiplier;
 
   return {
     arrivalSeconds,
@@ -181,6 +183,7 @@ export function derivePortStats(
     pricePerUnit,
     moneyPerShip,
     moneyPerSecond: moneyPerShip / cycleSeconds,
+    yieldMultiplier,
     portScale: scale,
   };
 }
@@ -266,6 +269,19 @@ export function incomeAfterNewPort(
     ports: [...state.ports, emptyPort()],
   };
   return totalIncome(probe, cfg);
+}
+
+/**
+ * How long a purchase takes to pay for itself, in seconds.
+ *
+ * This is the number that actually compares two tiles. Price alone does not:
+ * a $250K upgrade buying +$185/s and a $15K one buying +$101/s look similar
+ * until you notice one repays in 22 minutes and the other in 2.5.
+ */
+export function paybackSeconds(cost: number, incomeGain: number): number {
+  if (!Number.isFinite(cost) || cost <= 0) return Infinity;
+  if (!Number.isFinite(incomeGain) || incomeGain <= 0) return Infinity;
+  return cost / incomeGain;
 }
 
 export function emptyPort(): PortState {
