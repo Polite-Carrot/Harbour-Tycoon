@@ -1,13 +1,14 @@
 import { StyleSheet, View } from 'react-native';
 import Svg, { G, Text as SvgText } from 'react-native-svg';
 import { formatMoney } from '../../sim/format';
-import type { DerivedStats, GameState } from '../../sim/types';
+import type { DerivedStats, PortState } from '../../sim/types';
 import { Crane } from './Crane';
 import { Quay } from './Quay';
 import { Seascape } from './Seascape';
 import { Ship } from './Ship';
 import {
   SCENE,
+  berthXFor,
   clamp01,
   containerRows,
   craneCount,
@@ -21,9 +22,6 @@ import { useSceneClock } from './useSceneClock';
 /** How long the payout floats up for after a ship finishes. */
 const PAYOUT_SECONDS = 1.4;
 
-/** Hull length in local units, before scaling. Mirrors the path in Ship.tsx. */
-const HULL_LENGTH = 124;
-
 /** Fraction of the arrival phase the outgoing ship takes to clear the berth. */
 const DEPART_SHARE = 0.45;
 
@@ -35,8 +33,12 @@ const DEPART_SHARE = 0.45;
 const ARRIVE_DELAY = 0.3;
 
 interface Props {
-  state: GameState;
+  port: PortState;
+  /** Index of this port, which selects its livery and tier. */
+  portIndex: number;
   stats: DerivedStats;
+  /** Epoch millis the port state is accurate as of. */
+  lastTickAt: number;
 }
 
 /**
@@ -47,35 +49,36 @@ interface Props {
  * is smooth at frame rate while the sim keeps ticking at 10Hz — and the two
  * can never drift, because the scene holds no animation state of its own.
  */
-export function PortScene({ state, stats }: Props) {
+export function PortScene({ port, portIndex, stats, lastTickAt }: Props) {
   const now = useSceneClock();
   const t = now / 1000;
 
   const { arrivalSeconds: arrival, unloadSeconds: unload, cycleSeconds: cycle } = stats;
 
-  const elapsed = Math.max(0, (now - state.lastTickAt) / 1000);
-  const pos = (((state.berthCycleSeconds + elapsed) % cycle) + cycle) % cycle;
+  const elapsed = Math.max(0, (now - lastTickAt) / 1000);
+  const pos = (((port.berthCycleSeconds + elapsed) % cycle) + cycle) % cycle;
 
   const arriving = pos < arrival;
   const arrivalP = arriving ? pos / arrival : 1;
   const unloadP = arriving ? 0 : clamp01((pos - arrival) / unload);
 
-  const scale = shipScale(state.upgrades.shipSize);
-  const rows = containerRows(state.upgrades.shipSize);
-  const hullWidth = HULL_LENGTH * scale;
+  const scale = shipScale(port.upgrades.shipSize);
+  const rows = containerRows(port.upgrades.shipSize);
+  const hullWidth = SCENE.hullLength * scale;
+  const berthX = berthXFor(scale);
 
   // Incoming ship: holds off, sails in, then sits and unloads.
   const arriveP = clamp01((arrivalP - ARRIVE_DELAY) / (1 - ARRIVE_DELAY));
-  const shipX = arriving ? lerp(-175, SCENE.berthX, easeOutCubic(arriveP)) : SCENE.berthX;
+  const shipX = arriving ? lerp(-175, berthX, easeOutCubic(arriveP)) : berthX;
   const cargo = arriving ? 1 : 1 - unloadP;
 
   // Outgoing ship: the one just emptied, clearing the berth as the next arrives.
   const departP = clamp01(arrivalP / DEPART_SHARE);
   const showDeparting = arriving && departP < 1;
-  const departX = lerp(SCENE.berthX, 400, easeInCubic(departP));
+  const departX = lerp(berthX, 400, easeInCubic(departP));
 
-  const cranes = craneCount(state.upgrades.cranes);
-  const craneSpeed = 0.5 + state.upgrades.cranes * 0.035;
+  const cranes = craneCount(port.upgrades.cranes);
+  const craneSpeed = 0.5 + port.upgrades.cranes * 0.035;
 
   const showPayout = arriving && pos < PAYOUT_SECONDS;
   const payoutP = showPayout ? pos / PAYOUT_SECONDS : 0;
@@ -86,9 +89,9 @@ export function PortScene({ state, stats }: Props) {
         width="100%"
         height="100%"
         viewBox={`0 0 ${SCENE.width} ${SCENE.height}`}
-        preserveAspectRatio="xMidYMid meet"
+        preserveAspectRatio="xMidYMid slice"
       >
-        <Seascape t={t} />
+        <Seascape t={t} port={portIndex} />
 
         {/* Cranes sit behind the hull so a moored ship reads as alongside, and
             spread along the berth the hull actually occupies — they run on
@@ -97,7 +100,7 @@ export function PortScene({ state, stats }: Props) {
           {Array.from({ length: cranes }, (_, i) => (
             <Crane
               key={i}
-              x={SCENE.berthX + hullWidth * ((i + 0.5) / cranes)}
+              x={berthX + hullWidth * ((i + 0.5) / cranes)}
               cycle={t * craneSpeed + i * 0.37}
               active={!arriving}
             />
@@ -113,6 +116,7 @@ export function PortScene({ state, stats }: Props) {
             cargoFraction={0}
             bob={Math.sin(t * 1.7) * 0.9}
             moving
+            port={portIndex}
           />
         )}
 
@@ -124,6 +128,7 @@ export function PortScene({ state, stats }: Props) {
           cargoFraction={cargo}
           bob={Math.sin(t * 1.5 + 1.1) * (arriving ? 1.1 : 0.55)}
           moving={arriving}
+          port={portIndex}
         />
 
         <Quay fill={unloadP} />
@@ -160,11 +165,7 @@ export function PortScene({ state, stats }: Props) {
 }
 
 const styles = StyleSheet.create({
-  frame: {
-    width: '100%',
-    aspectRatio: SCENE.width / SCENE.height,
-    borderRadius: 10,
-    overflow: 'hidden',
-    backgroundColor: '#0a1628',
-  },
+  // Fills whatever space the layout gives it; "slice" crops the sides rather
+  // than letterboxing, which is why the berth is centred.
+  frame: { flex: 1, width: '100%', overflow: 'hidden', backgroundColor: '#0a1628' },
 });

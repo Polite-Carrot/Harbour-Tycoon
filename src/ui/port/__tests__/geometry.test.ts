@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { BALANCE } from '../../../config/balance';
 import {
   SCENE,
+  berthXFor,
   clamp01,
   containerRows,
   craneCount,
@@ -48,9 +49,16 @@ describe('ship growth is bounded', () => {
     }
   });
 
-  it('keeps the widest hull inside the scene', () => {
-    const HULL_LENGTH = 124;
-    expect(SCENE.berthX + HULL_LENGTH * shipScale(1000)).toBeLessThanOrEqual(SCENE.width);
+  it('centres the berth at every scale, so side crops never eat the hull', () => {
+    for (const level of [0, 5, 14, 1000]) {
+      const scale = shipScale(level);
+      const left = berthXFor(scale);
+      const right = left + SCENE.hullLength * scale;
+      expect(left).toBeGreaterThanOrEqual(0);
+      expect(right).toBeLessThanOrEqual(SCENE.width);
+      // Equal water either side is what makes "slice" cropping safe.
+      expect(left).toBeCloseTo(SCENE.width - right, 6);
+    }
   });
 
   it('floats hulls clear of the quay coping', () => {

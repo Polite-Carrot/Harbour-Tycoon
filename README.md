@@ -52,16 +52,69 @@ native relies on.
 ```
 src/config/balance.ts   EVERY tunable number. Nothing else hard-codes balance.
 src/sim/                Pure simulation. No React, no storage, no clock.
-  engine.ts             advance / catchUp / buyUpgrade / sanitise
-  economy.ts            cost curves and derived stats
+  engine.ts             advance / catchUp / buyUpgrade / buyPort / sanitise
+  economy.ts            cost curves, port tiers, bulk-buy maths
   policy.ts             "active player" model, shared by report + tests
   format.ts             big-number, currency and duration display
 src/state/              Persistence and the React lifecycle wiring
 src/ui/                 Presentation
   port/                 The animated harbour scene (SVG)
+  Hud.tsx               Money and berth status, overlaid on the scene
+  PortSwitcher.tsx      Owned ports + the buy-a-port card
+  BuyDock.tsx           Upgrade tiles and the x1/x10/MAX selector
 App.tsx                 Screen composition
 scripts/balance-report.ts  Tuning harness
 ```
+
+## Owning several ports
+
+The harbour is not one port. Each port runs **its own berth and its own
+upgrade levels**, and they all tick at once — total income is the sum.
+
+A new port costs `baseCost * costGrowth^i` and is a real milestone: on the
+current tune the second opens around 80 minutes in, and the rest follow roughly
+every half hour.
+
+The design rule that makes this safe: **port `i` scales its yields AND its
+upgrade costs by the same tier factor** (`scaleGrowth^i`, currently 12). That
+makes every port a self-similar copy of the first, so the stability rule below
+holds per-port and therefore holds for the sum, no matter how many are owned.
+Scaling yields without costs would make each new port trivially farmable — a
+fresh cheap upgrade track funded by an established port's income. There is a
+test asserting both sides scale together.
+
+New ports start at level 0, so expansion gives back the fast early-game
+purchase rhythm at a higher tier. Each has its own livery, so switching ports
+visibly changes where you are.
+
+### Reading the pacing numbers
+
+Purchase gaps must be measured **per port**. Purchases are aggregated across
+every port, so six running ports make the overall gap about six times tighter
+while each individual port is pacing perfectly. `npm run balance` prints both
+and labels which one to tune against:
+
+```
+Late-game pacing (last 240 upgrades)
+  aggregate gap   12.9s across 6 port(s)
+  per-port gap    76.3s  <- the one to tune against
+```
+
+## Buying things
+
+Upgrades live in a fixed dock at the bottom of the screen — three tiles under
+the thumb — with an **x1 / x10 / MAX** selector. Bulk cost is the closed-form
+geometric series, and MAX inverts it rather than looping:
+
+```
+n = log(1 + money * (g - 1) / firstCost) / log(g)
+```
+
+so buying a thousand levels costs one calculation. Tests assert ten single buys
+cost exactly what one x10 buy costs, that MAX never overspends by a cent, and
+that it still respects `maxLevel`.
+
+
 
 The split that matters: `src/sim/` imports nothing from React, AsyncStorage or
 `Date.now()`. Time is always passed in. That is what makes the economy testable
@@ -71,6 +124,11 @@ without a device and portable if the UI is ever replaced.
 
 `src/ui/port/` draws a night harbour in SVG: ships sail in, moor, and are
 worked by gantry cranes while the container yard on the quay fills up.
+
+The scene fills whatever space the controls do not need, and is rendered with
+`preserveAspectRatio="slice"` so it crops rather than letterboxes. That is why
+the berth is **centred** at every ship scale — the crop then eats empty water
+instead of the hull. A test asserts it.
 
 It is **derived from the simulation, not animated alongside it**. The scene
 recomputes its position in the berth cycle from the save's own clock —
@@ -90,6 +148,7 @@ What the upgrades actually look like:
 | Cranes | more gantries on the quay (1 -> 4), working faster |
 | Ship Size | bigger hulls, taller deck stacks |
 | Contracts | no direct visual — it is a price multiplier |
+| New port | a whole new harbour, in its own colour scheme |
 
 Both ship dimensions **cap** well before the numbers do: ship size passes level
 130 within a few hours, so the art saturates around level 14 or the hull would
@@ -165,7 +224,9 @@ the player onto the other two tracks.
 
 ## Save / load
 
-- `AsyncStorage`, single JSON blob, versioned.
+- `AsyncStorage`, single JSON blob, versioned. **v1 saves migrate**: the old
+  flat single-port shape is lifted into `ports[0]`, keeping levels, money and
+  lifetime earnings. Anyone who played the deployed build keeps their harbour.
 - Written on background/inactive (`AppState`), on unmount, on every purchase,
   and on a 15s autosave.
 - Everything loaded from disk goes through `sanitise()` before it reaches the
@@ -178,7 +239,8 @@ the player onto the other two tracks.
 ## Deliberately not built yet
 
 Ads, IAP, prestige, art, sound, analytics, achievements — all out of scope for
-the slice.
+the slice. Buying ports is **expansion, not prestige**: nothing resets, and no
+permanent multiplier is earned.
 
 Two hooks are already in place for prestige when it lands: `lifetimeEarnings`
 is tracked separately from spendable `money` and is never decremented by
@@ -187,8 +249,11 @@ multiplier would be applied.
 
 ## Known limitations of the slice
 
-- One berth. `berthCycleSeconds` is a single scalar; multiple berths will need
-  it to become an array (the closed-form maths is per-berth and unchanged).
+- One berth per port. Several berths within a port would need
+  `berthCycleSeconds` to become an array (the closed-form maths is per-berth
+  and unchanged).
+- Six ports is the ceiling, and the switcher is a horizontal strip — it will
+  need rethinking if that ever grows.
 - Cargo sells instantly at the dock. There is no warehouse, so no storage cap
   and nothing to overflow.
 - Cranes stop being worth buying at level 30 by design. Nothing in the UI says

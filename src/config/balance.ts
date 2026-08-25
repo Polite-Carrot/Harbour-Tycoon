@@ -46,6 +46,23 @@ export interface BalanceConfig {
     readonly basePricePerUnit: number;
   };
   readonly upgrades: Readonly<Record<UpgradeId, UpgradeConfig>>;
+  readonly ports: {
+    /** Hard ceiling on how many ports can be owned. */
+    readonly maxPorts: number;
+    /** Cost of the second port (index 1). */
+    readonly baseCost: number;
+    /** Each further port costs this multiple of the previous one. */
+    readonly costGrowth: number;
+    /**
+     * Tier factor. Port i yields scaleGrowth^i times port 0 — and its upgrades
+     * cost scaleGrowth^i times as much. Scaling BOTH sides is what keeps each
+     * port a self-similar copy of the first: the stability rule below holds
+     * per-port, so it holds for the sum no matter how many ports are owned.
+     */
+    readonly scaleGrowth: number;
+    /** Display names, indexed by port. Falls back to "Port N" past the end. */
+    readonly names: readonly string[];
+  };
   readonly player: {
     readonly startingMoney: number;
   };
@@ -130,6 +147,21 @@ export const BALANCE: BalanceConfig = {
       effectPerLevel: 1.06,
       maxLevel: null,
     },
+  },
+
+  ports: {
+    maxPorts: 6,
+    baseCost: 20_000,
+    costGrowth: 16,
+    scaleGrowth: 12,
+    names: [
+      'Old Harbour',
+      'Saltmere Quay',
+      'Kestrel Bay',
+      'Northreach',
+      'Cape Verity',
+      'Aurelia Deep',
+    ],
   },
 
   player: {

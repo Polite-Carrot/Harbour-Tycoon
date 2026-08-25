@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Platform, type AppStateStatus } from 'react-native';
 import { BALANCE, type UpgradeId } from '../config/balance';
-import { buyUpgrade, catchUp, createNewGame } from '../sim/engine';
-import type { GameState, OfflineReport } from '../sim/types';
+import { buyPort, buyUpgrade, catchUp, createNewGame, selectPort } from '../sim/engine';
+import type { BuyQuantity, GameState, OfflineReport } from '../sim/types';
 import { clearSave, loadGame, saveGame } from './persistence';
 
 /**
@@ -127,17 +127,45 @@ export function useGame() {
   }, [ready, settle]);
 
   // --- actions --------------------------------------------------------------
-  const buy = useCallback(
-    (id: UpgradeId) => {
+  /** Settle to now, apply `change`, commit, and persist if anything happened. */
+  const act = useCallback(
+    (change: (s: GameState) => { state: GameState; changed: boolean }) => {
       const current = stateRef.current;
       if (!current) return;
-      // Settle first so the purchase can't swallow or duplicate a partial tick.
+      // Settle first so the action can't swallow or duplicate a partial tick.
       const settled = catchUp(current, Date.now(), BALANCE, false).result.state;
-      const { state: next, bought } = buyUpgrade(settled, id);
+      const { state: next, changed } = change(settled);
       commit(next);
-      if (bought) void saveGame(next);
+      if (changed) void saveGame(next);
     },
     [commit],
+  );
+
+  const buy = useCallback(
+    (id: UpgradeId, quantity: BuyQuantity = 1) => {
+      act((s) => {
+        const r = buyUpgrade(s, id, quantity);
+        return { state: r.state, changed: r.bought > 0 };
+      });
+    },
+    [act],
+  );
+
+  const buyNewPort = useCallback(() => {
+    act((s) => {
+      const r = buyPort(s);
+      return { state: r.state, changed: r.bought };
+    });
+  }, [act]);
+
+  const choosePort = useCallback(
+    (index: number) => {
+      act((s) => {
+        const next = selectPort(s, index);
+        return { state: next, changed: next !== s };
+      });
+    },
+    [act],
   );
 
   const resetGame = useCallback(async () => {
@@ -148,5 +176,14 @@ export function useGame() {
 
   const dismissOfflineReport = useCallback(() => setOfflineReport(null), []);
 
-  return { state: snapshot, ready, offlineReport, buy, resetGame, dismissOfflineReport };
+  return {
+    state: snapshot,
+    ready,
+    offlineReport,
+    buy,
+    buyNewPort,
+    choosePort,
+    resetGame,
+    dismissOfflineReport,
+  };
 }

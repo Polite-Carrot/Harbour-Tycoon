@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import { G, Path, Rect } from 'react-native-svg';
-import { containerColour } from './geometry';
+import { containerColour, portPalette } from './geometry';
 
 const COLS = 6;
 const BOX_W = 12;
@@ -21,13 +21,16 @@ interface Props {
   bob: number;
   /** Draws a bow wave when the ship is under way. */
   moving: boolean;
+  /** Which port's livery to paint the hull in. */
+  port: number;
 }
 
 /**
  * A container ship, drawn bow-right. Local coordinates put the waterline at
  * y = 0 and the stern at x = 0, so callers only deal with position and scale.
  */
-export const Ship = memo(function Ship({ x, y, scale, rows, cargoFraction, bob, moving }: Props) {
+export const Ship = memo(function Ship({ x, y, scale, rows, cargoFraction, bob, moving, port }: Props) {
+  const pal = portPalette(port);
   const total = COLS * rows;
   const shown = Math.round(total * Math.max(0, Math.min(1, cargoFraction)));
 
@@ -60,9 +63,9 @@ export const Ship = memo(function Ship({ x, y, scale, rows, cargoFraction, bob, 
       )}
 
       {/* Hull, bow tapering to the right. */}
-      <Path d="M0,-16 L104,-16 L124,-7 L117,3 L3,3 Z" fill="#8c2f39" />
+      <Path d="M0,-16 L104,-16 L124,-7 L117,3 L3,3 Z" fill={pal.hull} />
       {/* Boot topping at the waterline. */}
-      <Path d="M3,-1 L118,-1 L117,3 L3,3 Z" fill="#40161c" opacity={0.9} />
+      <Path d="M3,-1 L118,-1 L117,3 L3,3 Z" fill={pal.hullDark} opacity={0.9} />
       {/* Deck line. */}
       <Rect x={0} y={-17} width={124} height={1.6} fill="#d9c9a3" opacity={0.75} />
 
@@ -77,7 +80,7 @@ export const Ship = memo(function Ship({ x, y, scale, rows, cargoFraction, bob, 
       <Rect x={13} y={-27} width={4} height={3} fill="#2b3a4a" />
       <Rect x={19} y={-27} width={4} height={3} fill="#2b3a4a" />
       <Rect x={12} y={-45} width={8} height={9} rx={1} fill="#2f4256" />
-      <Rect x={12} y={-45} width={8} height={2.5} fill="#c1666b" />
+      <Rect x={12} y={-45} width={8} height={2.5} fill={pal.hull} />
     </G>
   );
 });
