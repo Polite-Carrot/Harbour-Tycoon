@@ -154,6 +154,17 @@ describe('upgrades', () => {
     }
   });
 
+  it('refuses a purchase whose price has overflowed to Infinity', () => {
+    // Infinity is not "< Infinity", so an unguarded compare would let an
+    // infinitely rich player buy at an infinite price and land on NaN.
+    const absurd = withLevels({ shipSize: 100_000 }, Infinity);
+    expect(Number.isFinite(upgradeCost('shipSize', 100_000, 0, BALANCE))).toBe(false);
+
+    const { state, bought } = buyUpgrade(absurd, 'shipSize', 1, 0, BALANCE);
+    expect(bought).toBe(0);
+    expect(Number.isNaN(state.money)).toBe(false);
+  });
+
   it('caps MAX at maxLevel however rich the player is', () => {
     const rich: GameState = { ...fresh(), money: 1e30 };
     const { state } = buyUpgrade(rich, 'cranes', 'max', 0, BALANCE);
@@ -258,6 +269,15 @@ describe('formatting', () => {
     expect(formatDuration(120)).toBe('2m');
     expect(formatDuration(95)).toBe('1m 35s');
     expect(formatDuration(9)).toBe('9s');
+  });
+
+  it('falls back to scientific notation past the suffix table', () => {
+    // Long sessions genuinely reach these magnitudes; without the fallback
+    // they render as an unreadable "181642849488Dc".
+    expect(formatNumber(1.83e44)).toBe('1.83e44');
+    expect(formatMoney(5e60)).toBe('$5.00e60');
+    // And the last real suffix still works, so the boundary is not off by one.
+    expect(formatNumber(1.5e33)).toBe('1.50Dc');
   });
 
   it('scales big numbers with suffixes', () => {

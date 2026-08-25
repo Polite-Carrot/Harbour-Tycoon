@@ -4,6 +4,7 @@ import { formatMoney } from '../../sim/format';
 import type { DerivedStats, PortState } from '../../sim/types';
 import { Crane } from './Crane';
 import { Quay } from './Quay';
+import { Quayside, Tugs } from './Quayside';
 import { Seascape } from './Seascape';
 import { Ship } from './Ship';
 import {
@@ -93,6 +94,9 @@ export function PortScene({ port, portIndex, stats, lastTickAt }: Props) {
       >
         <Seascape t={t} port={portIndex} />
 
+        {/* Structures the later upgrades buy, behind the cranes and the hull. */}
+        <Quayside floodlights={port.upgrades.floodlights} customs={port.upgrades.customs} />
+
         {/* Cranes sit behind the hull so a moored ship reads as alongside, and
             spread along the berth the hull actually occupies — they run on
             quay rails, so they reposition as ships get bigger. */}
@@ -117,6 +121,15 @@ export function PortScene({ port, portIndex, stats, lastTickAt }: Props) {
             bob={Math.sin(t * 1.7) * 0.9}
             moving
             port={portIndex}
+          />
+        )}
+
+        {arriving && (
+          <Tugs
+            count={port.upgrades.tugboats}
+            shipX={shipX}
+            y={SCENE.waterlineY}
+            bob={Math.sin(t * 2.1) * 1.2}
           />
         )}
 

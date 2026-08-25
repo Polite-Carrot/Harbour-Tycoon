@@ -140,7 +140,7 @@ function report(
 
   // Gaps are aggregated across ports, so they tighten as ports are added.
   // The number that actually matters is the gap per port.
-  const late = purchases.slice(-240).filter((p) => !p.isPort);
+  const late = purchases.slice(-600).filter((p) => !p.isPort);
   const byPort = new Map<number, number[]>();
   for (const p of late) {
     const times = byPort.get(p.port) ?? [];
@@ -151,12 +151,26 @@ function report(
   for (const times of byPort.values()) {
     for (let i = 1; i < times.length; i++) perPortGaps.push(times[i] - times[i - 1]);
   }
+  const byTrack = new Map<string, number[]>();
+  for (const p of late) {
+    const key = `${p.port}:${p.label.split(' ')[0]}`;
+    const times = byTrack.get(key) ?? [];
+    times.push(p.atSeconds);
+    byTrack.set(key, times);
+  }
+  const perTrackGaps: number[] = [];
+  for (const times of byTrack.values()) {
+    for (let i = 1; i < times.length; i++) perTrackGaps.push(times[i] - times[i - 1]);
+  }
+
   const lateAggregate = late.reduce((a, b) => a + b.gapSeconds, 0) / (late.length || 1);
   const latePerPort = perPortGaps.reduce((a, b) => a + b, 0) / (perPortGaps.length || 1);
+  const latePerTrack = perTrackGaps.reduce((a, b) => a + b, 0) / (perTrackGaps.length || 1);
 
   console.log('\nLate-game pacing (last 240 upgrades)');
   console.log(`  aggregate gap   ${lateAggregate.toFixed(1)}s across ${byPort.size} port(s)`);
-  console.log(`  per-port gap    ${latePerPort.toFixed(1)}s  <- the one to tune against`);
+  console.log(`  per-port gap    ${latePerPort.toFixed(1)}s`);
+  console.log(`  per-track gap   ${latePerTrack.toFixed(1)}s  <- the runaway detector`);
 
   console.log('\nEvery 25th purchase');
   console.log(header);

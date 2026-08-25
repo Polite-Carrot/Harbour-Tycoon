@@ -143,22 +143,31 @@ export function derivePortStats(
   cfg: BalanceConfig = BALANCE,
 ): DerivedStats {
   const { berth, cargo, upgrades } = cfg;
+  const lv = port.upgrades;
   const scale = portScale(portIndex, cfg);
 
+  // Floodlights shorten the whole cycle, so they apply to both phases.
+  const shift = Math.pow(upgrades.floodlights.effectPerLevel, lv.floodlights);
+
+  // Cranes work the unload phase; tugboats work the arrival phase. Both floor
+  // out, which is what stops either track running the cycle down to zero.
   const unloadSeconds = Math.max(
     berth.minUnloadSeconds,
-    berth.baseUnloadSeconds * Math.pow(upgrades.cranes.effectPerLevel, port.upgrades.cranes),
+    berth.baseUnloadSeconds * Math.pow(upgrades.cranes.effectPerLevel, lv.cranes) * shift,
   );
 
-  const arrivalSeconds = Math.max(berth.minArrivalSeconds, berth.baseArrivalSeconds);
+  const arrivalSeconds = Math.max(
+    berth.minArrivalSeconds,
+    berth.baseArrivalSeconds * Math.pow(upgrades.tugboats.effectPerLevel, lv.tugboats) * shift,
+  );
 
   const cargoPerShip =
-    cargo.baseUnitsPerShip *
-    Math.pow(upgrades.shipSize.effectPerLevel, port.upgrades.shipSize);
+    cargo.baseUnitsPerShip * Math.pow(upgrades.shipSize.effectPerLevel, lv.shipSize);
 
   const pricePerUnit =
     cargo.basePricePerUnit *
-    Math.pow(upgrades.contracts.effectPerLevel, port.upgrades.contracts) *
+    Math.pow(upgrades.contracts.effectPerLevel, lv.contracts) *
+    Math.pow(upgrades.customs.effectPerLevel, lv.customs) *
     scale;
 
   const cycleSeconds = arrivalSeconds + unloadSeconds;
@@ -260,5 +269,8 @@ export function incomeAfterNewPort(
 }
 
 export function emptyPort(): PortState {
-  return { upgrades: { cranes: 0, shipSize: 0, contracts: 0 }, berthCycleSeconds: 0 };
+  return {
+    upgrades: { cranes: 0, shipSize: 0, contracts: 0, tugboats: 0, floodlights: 0, customs: 0 },
+    berthCycleSeconds: 0,
+  };
 }

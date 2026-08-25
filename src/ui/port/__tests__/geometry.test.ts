@@ -100,3 +100,29 @@ describe('wave path', () => {
     expect(Math.max(...xs)).toBeCloseTo(SCENE.width);
   });
 });
+
+describe('the safe band', () => {
+  it('is where quayside structures must live', () => {
+    // The scene renders with preserveAspectRatio="slice", so on a tall screen
+    // the outer edges are cropped. Anything drawn outside this band is simply
+    // never seen — which is exactly what happened to the first placement of
+    // the floodlight masts and the customs house.
+    const SAFE_LEFT = 60;
+    const SAFE_RIGHT = 260;
+
+    // Mirrors Quayside.tsx.
+    const mastXs = [72, 128, 184, 240];
+    const customsSpan = [192, 254];
+
+    for (const x of mastXs) {
+      expect(x).toBeGreaterThanOrEqual(SAFE_LEFT);
+      expect(x).toBeLessThanOrEqual(SAFE_RIGHT);
+    }
+    expect(customsSpan[0]).toBeGreaterThanOrEqual(SAFE_LEFT);
+    expect(customsSpan[1]).toBeLessThanOrEqual(SAFE_RIGHT);
+
+    // And the hull, at its widest, is already inside it by construction.
+    const scale = shipScale(1000);
+    expect(berthXFor(scale)).toBeGreaterThanOrEqual(SAFE_LEFT - 20);
+  });
+});

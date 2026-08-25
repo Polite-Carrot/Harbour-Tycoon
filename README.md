@@ -89,22 +89,72 @@ visibly changes where you are.
 
 ### Reading the pacing numbers
 
-Purchase gaps must be measured **per port**. Purchases are aggregated across
-every port, so six running ports make the overall gap about six times tighter
-while each individual port is pacing perfectly. `npm run balance` prints both
-and labels which one to tune against:
+Purchase gaps must be measured **per track, per port**. Purchases aggregate
+across every port AND every upgrade, so six ports times six tracks makes the
+overall gap about thirty-six times tighter — which says nothing about whether
+any one thing paces well. A genuine runaway shows up as the per-track number
+collapsing toward zero. `npm run balance` prints all three and labels which
+matters:
 
 ```
 Late-game pacing (last 240 upgrades)
-  aggregate gap   12.9s across 6 port(s)
-  per-port gap    76.3s  <- the one to tune against
+  aggregate gap   9.4s across 6 port(s)
+  per-port gap    46.8s
+  per-track gap   93.9s  <- the runaway detector
 ```
+
+### Pricing cannot pace expansion
+
+`ports.costGrowth` is 20,000. That looks absurd and it is, deliberately.
+
+Late-game income doubles every couple of minutes, so a port priced at 16x the
+last one is reached almost instantly and every port unlocks in one compressed
+burst. Measured spacing between port unlocks: **16x -> ~8 min apart, 1000x ->
+~13 min, 20000x -> ~15-18 min**. Four orders of magnitude of price bought about
+ten minutes.
+
+The conclusion is that money cannot gate expansion in an economy that compounds
+this fast. Properly spacing ports needs a gate money cannot buy — a
+requirement on the previous port's development, or prestige. Neither exists in
+the slice yet, so ports currently all open inside the first ~2.5 hours.
 
 ## Buying things
 
-Upgrades live in a fixed dock at the bottom of the screen — three tiles under
-the thumb — with an **x1 / x10 / MAX** selector. Bulk cost is the closed-form
-geometric series, and MAX inverts it rather than looping:
+Upgrades live in a horizontal **carousel** at the bottom of the screen —
+cheapest on the left, most expensive on the right — with an **x1 / x10 / MAX**
+selector.
+
+The order is fixed in `UPGRADE_ORDER`, **not** sorted by live cost. Costs grow
+exponentially as you level, so a live sort would reshuffle tiles between taps
+and you would buy the wrong thing. A test asserts the base costs stay
+ascending, which makes that ordering the UI's contract.
+
+| track | base cost | effect | cap |
+|---|---|---|---|
+| Cranes | $30 | unload faster | 30 |
+| Ship Size | $45 | more cargo per ship | — |
+| Contracts | $75 | better price per unit | — |
+| Tugboats | $900 | ships reach the berth sooner | 12 |
+| Floodlights | $12K | shortens the *whole* cycle | 20 |
+| Customs House | $250K | another price multiplier | 15 |
+
+Every track added after the original three is **capped**, and that is forced,
+not stylistic: the uncapped budget is nearly spent (1.08 x 1.06 = 1.1448 against
+a 1.15 ceiling). A capped track terminates, contributing a bounded one-off
+multiplier, so it cannot compound into a runaway. Any new uncapped track would
+have to come out of that budget.
+
+Tugboats are the one genuinely new axis — nothing else touched the arrival
+phase. Customs House is Contracts again at a higher price tier, which is the
+normal idle-game shape for a late money sink.
+
+A track pinned against a floor (arrival or unload) has levels left but adds
+nothing. The carousel greys those out as **CAPPED / no further effect** rather
+than inviting the spend — without it, Tugboats kept selling at $5.64K a level
+for $0.00/s.
+
+Bulk cost is the closed-form geometric series, and MAX inverts it rather than
+looping:
 
 ```
 n = log(1 + money * (g - 1) / firstCost) / log(g)
@@ -113,6 +163,13 @@ n = log(1 + money * (g - 1) / firstCost) / log(g)
 so buying a thousand levels costs one calculation. Tests assert ten single buys
 cost exactly what one x10 buy costs, that MAX never overspends by a cent, and
 that it still respects `maxLevel`.
+
+Purchases also refuse a price that has overflowed to `Infinity`. A deep enough
+session genuinely reaches it, and `Infinity < Infinity` is false — so an
+unguarded compare would let an infinitely rich player buy at an infinite price
+and land on `money = NaN`, poisoning every later tick. Past the suffix table
+(`Dc`, 10^33) numbers render as `1.83e44` rather than an unreadable
+`181642849488Dc`.
 
 
 
@@ -148,7 +205,15 @@ What the upgrades actually look like:
 | Cranes | more gantries on the quay (1 -> 4), working faster |
 | Ship Size | bigger hulls, taller deck stacks |
 | Contracts | no direct visual — it is a price multiplier |
+| Tugboats | tugs escorting the ship in |
+| Floodlights | lit masts along the quay |
+| Customs House | a lit shed on the quay |
 | New port | a whole new harbour, in its own colour scheme |
+
+Quayside structures must sit within roughly x 60-260 of the viewBox. The scene
+renders with `slice`, so anything outside that band is cropped away and never
+seen — which is exactly what happened to the first placement of the floodlight
+masts. There is a test.
 
 Both ship dimensions **cap** well before the numbers do: ship size passes level
 130 within a few hours, so the art saturates around level 14 or the hull would

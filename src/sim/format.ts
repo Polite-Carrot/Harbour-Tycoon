@@ -18,7 +18,16 @@ export function formatNumber(value: number): string {
           ? n.toFixed(1)
           : Math.floor(n).toString()
       : (() => {
-          const tier = Math.min(Math.floor(Math.log10(n) / 3), SUFFIXES.length - 1);
+          const tier = Math.floor(Math.log10(n) / 3);
+
+          // Past the end of the suffix table, fall back to scientific notation.
+          // A long session genuinely reaches these magnitudes, and without this
+          // the number renders as an unreadable "181642849488Dc".
+          if (tier >= SUFFIXES.length) {
+            const exp = Math.floor(Math.log10(n));
+            return `${(n / Math.pow(10, exp)).toFixed(2)}e${exp}`;
+          }
+
           const scaled = n / Math.pow(1000, tier);
           const digits = scaled < 10 ? 2 : scaled < 100 ? 1 : 0;
           return `${scaled.toFixed(digits)}${SUFFIXES[tier]}`;

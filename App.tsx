@@ -6,7 +6,7 @@ import { affordability, deriveStats, incomeAfterBuying, portName, totalIncome } 
 import { formatMoney } from './src/sim/format';
 import type { BuyQuantity } from './src/sim/types';
 import { useGame } from './src/state/useGame';
-import { BuyDock } from './src/ui/BuyDock';
+import { UpgradeCarousel } from './src/ui/UpgradeCarousel';
 import { Hud } from './src/ui/Hud';
 import { OfflineModal } from './src/ui/OfflineModal';
 import { PortSwitcher } from './src/ui/PortSwitcher';
@@ -72,7 +72,7 @@ export default function App() {
       <View style={styles.controls}>
         <PortSwitcher state={state} onSelect={choosePort} onBuyPort={buyNewPort} />
 
-        <BuyDock
+        <UpgradeCarousel
           entries={view.entries}
           gains={view.gains}
           quantity={quantity}

@@ -10,7 +10,13 @@
  * ============================================================================
  */
 
-export type UpgradeId = 'cranes' | 'shipSize' | 'contracts';
+export type UpgradeId =
+  | 'cranes'
+  | 'shipSize'
+  | 'contracts'
+  | 'tugboats'
+  | 'floodlights'
+  | 'customs';
 
 export interface UpgradeConfig {
   readonly id: UpgradeId;
@@ -51,7 +57,17 @@ export interface BalanceConfig {
     readonly maxPorts: number;
     /** Cost of the second port (index 1). */
     readonly baseCost: number;
-    /** Each further port costs this multiple of the previous one. */
+    /**
+     * Each further port costs this multiple of the previous one.
+     *
+     * The value looks absurd, and it is — deliberately. Late-game income
+     * doubles every couple of minutes, so a port priced at 16x or even 70x the
+     * last one is reached almost immediately and every port unlocks in one
+     * compressed burst. Measured: 16x spaced ports ~8 min apart, 1000x ~13
+     * min, 20000x ~15-18 min. Pricing has very little leverage here; properly
+     * pacing expansion needs a gate money cannot buy (or prestige), which the
+     * slice does not have yet.
+     */
     readonly costGrowth: number;
     /**
      * Tier factor. Port i yields scaleGrowth^i times port 0 — and its upgrades
@@ -97,20 +113,31 @@ export const BALANCE: BalanceConfig = {
   },
 
   upgrades: {
-    // ---- STABILITY RULE — read before changing effectPerLevel ------------
-    // Income is the PRODUCT of every track's effect, so the uncapped tracks
-    // multiply together. If a player levels them in lockstep, income grows by
-    // (shipSize.effect * contracts.effect) per step while the next purchase
-    // only costs costGrowth more. Keep
+    // ---- STABILITY RULE — read before adding or retuning a track ---------
+    // Income is the PRODUCT of every track's effect, so UNCAPPED tracks
+    // multiply together forever. If a player levels them in lockstep, income
+    // grows by their combined effect per step while the next purchase only
+    // costs costGrowth more. Keep
     //
-    //     shipSize.effectPerLevel * contracts.effectPerLevel  <  min costGrowth
-    //     current: 1.08 * 1.06 = 1.1448  <  1.15               OK
+    //     product of UNCAPPED effectPerLevel  <  min UNCAPPED costGrowth
+    //     current: 1.08 * 1.06 = 1.1448       <  1.15            OK
     //
-    // or the economy hyperinflates to Infinity within the hour. The
-    // `decelerates` test in engine.test.ts enforces this; `npm run balance`
-    // shows it as purchase gaps that shrink instead of slowly growing.
-    // Cranes are exempt: they are capped and their effect asymptotes.
+    // or the economy hyperinflates to Infinity within the hour.
+    //
+    // That budget is nearly spent, which is why every track added since is
+    // CAPPED. A capped track terminates: it contributes a bounded one-off
+    // multiplier and then stops, so it cannot drive runaway growth no matter
+    // how strong it is. Any NEW uncapped track would have to come out of the
+    // 1.15 budget above — in practice that means capping it instead.
+    //
+    // `balance.test.ts` enforces the rule; `npm run balance` shows a breach as
+    // purchase gaps that shrink toward zero instead of holding steady.
     // ----------------------------------------------------------------------
+    //
+    // ORDER MATTERS: UPGRADE_ORDER below drives the buy carousel, and is
+    // asserted to run cheapest-first so the expensive tracks stay on the
+    // right. Sorting by live cost instead would reshuffle tiles under the
+    // player's thumb as levels grow.
 
     // Cranes cut unload time. Effect is multiplicative and floors out at
     // minUnloadSeconds, so cranes deliberately stop being worth buying past
@@ -147,12 +174,54 @@ export const BALANCE: BalanceConfig = {
       effectPerLevel: 1.06,
       maxLevel: null,
     },
+
+    // Tugboats work the OTHER half of the cycle: the dead time before a ship
+    // is alongside. Nothing else touches arrival, so this is the one track
+    // that keeps paying when unloading is already at its floor.
+    tugboats: {
+      id: 'tugboats',
+      name: 'Tugboats',
+      blurb: 'Ships reach the berth sooner',
+      baseCost: 900,
+      costGrowth: 1.14,
+      effectPerLevel: 0.93,
+      // Capped near where arrival hits minArrivalSeconds, so the track does
+      // not spend its last levels doing nothing. Floodlights also shorten
+      // arrival, so the exact dead point moves — the carousel disables any
+      // track whose next level would add no income, which covers the rest.
+      maxLevel: 12,
+    },
+
+    // Floodlights shorten the whole cycle — both arrival and unloading — so
+    // they stack with cranes and tugboats rather than duplicating either.
+    floodlights: {
+      id: 'floodlights',
+      name: 'Floodlights',
+      blurb: 'Run the port around the clock',
+      baseCost: 12_000,
+      costGrowth: 1.13,
+      effectPerLevel: 0.97,
+      maxLevel: 20,
+    },
+
+    // Customs House is a second price multiplier at a much higher price tier.
+    // Mechanically it is Contracts again; what differs is the cost curve and
+    // the cap, which is the usual idle-game shape for a late-game money sink.
+    customs: {
+      id: 'customs',
+      name: 'Customs House',
+      blurb: 'Clear cargo at a premium',
+      baseCost: 250_000,
+      costGrowth: 1.12,
+      effectPerLevel: 1.1,
+      maxLevel: 15,
+    },
   },
 
   ports: {
     maxPorts: 6,
     baseCost: 20_000,
-    costGrowth: 16,
+    costGrowth: 20_000,
     scaleGrowth: 12,
     names: [
       'Old Harbour',
@@ -180,5 +249,16 @@ export const BALANCE: BalanceConfig = {
   },
 };
 
-/** Stable list for iterating upgrades in a fixed display order. */
-export const UPGRADE_ORDER: readonly UpgradeId[] = ['cranes', 'shipSize', 'contracts'];
+/**
+ * Display order for the buy carousel, cheapest base cost first so the
+ * expensive tracks sit to the right. Fixed, not sorted at runtime — see the
+ * ORDER MATTERS note above. `balance.test.ts` asserts it stays ascending.
+ */
+export const UPGRADE_ORDER: readonly UpgradeId[] = [
+  'cranes',
+  'shipSize',
+  'contracts',
+  'tugboats',
+  'floodlights',
+  'customs',
+];

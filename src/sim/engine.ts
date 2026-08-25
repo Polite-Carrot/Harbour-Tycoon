@@ -192,7 +192,10 @@ export function buyUpgrade(
   if (count <= 0) return { state, bought: 0 };
 
   const cost = bulkCost(id, level, count, i, cfg);
-  if (state.money < cost) return { state, bought: 0 };
+  // A deep enough session can push a cost past Number.MAX_VALUE. Infinity is
+  // not "< Infinity", so without this an infinitely rich player would buy at
+  // an infinite price and land on money = NaN, poisoning every later tick.
+  if (!Number.isFinite(cost) || state.money < cost) return { state, bought: 0 };
 
   return {
     state: {
@@ -217,7 +220,7 @@ export function buyPort(
   if (state.ports.length >= cfg.ports.maxPorts) return { state, bought: false };
 
   const cost = portCost(state.ports.length, cfg);
-  if (state.money < cost) return { state, bought: false };
+  if (!Number.isFinite(cost) || state.money < cost) return { state, bought: false };
 
   return {
     state: {
@@ -243,7 +246,9 @@ function sanitisePort(raw: unknown, cfg: BalanceConfig): PortState {
   const r = (raw ?? {}) as Record<string, unknown>;
   const rawUpgrades = (r.upgrades ?? {}) as Record<string, unknown>;
 
-  const upgrades = { cranes: 0, shipSize: 0, contracts: 0 } as Record<UpgradeId, number>;
+  // Built from UPGRADE_ORDER, so a save written before a track existed just
+  // defaults it to 0 rather than needing a schema bump.
+  const upgrades = {} as Record<UpgradeId, number>;
   for (const id of UPGRADE_ORDER) {
     const n = Math.floor(num(rawUpgrades[id], 0));
     const max = cfg.upgrades[id].maxLevel;

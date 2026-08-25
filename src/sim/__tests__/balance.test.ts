@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { BALANCE, UPGRADE_ORDER } from '../../config/balance';
+import { BALANCE, UPGRADE_ORDER, type UpgradeId } from '../../config/balance';
 import { advance, buyPort, buyUpgrade, createNewGame } from '../engine';
-import { derivePortStats, portCost, totalIncome, upgradeCost } from '../economy';
+import { derivePortStats, incomeAfterBuying, portCost, totalIncome, upgradeCost } from '../economy';
 import { bestBuy } from '../policy';
 import type { GameState } from '../types';
 
@@ -63,6 +63,30 @@ function playActively(horizon: number, step = 0.5) {
   return { state, purchases };
 }
 
+describe('the buy carousel', () => {
+  it('lists upgrades cheapest first, so the pricey ones stay on the right', () => {
+    // The carousel renders UPGRADE_ORDER left to right and never re-sorts at
+    // runtime, so this ordering IS the UI contract.
+    const costs = UPGRADE_ORDER.map((id) => BALANCE.upgrades[id].baseCost);
+    for (let i = 1; i < costs.length; i++) {
+      expect(costs[i]).toBeGreaterThan(costs[i - 1]);
+    }
+  });
+
+  it('has a config entry for every id, with its own id set correctly', () => {
+    for (const id of UPGRADE_ORDER) {
+      expect(BALANCE.upgrades[id]).toBeDefined();
+      expect(BALANCE.upgrades[id].id).toBe(id);
+    }
+    expect(new Set(UPGRADE_ORDER).size).toBe(UPGRADE_ORDER.length);
+  });
+
+  it('starts every track at zero on a new port', () => {
+    const port = createNewGame(0, BALANCE).ports[0];
+    for (const id of UPGRADE_ORDER) expect(port.upgrades[id]).toBe(0);
+  });
+});
+
 describe('the stability rule', () => {
   it('keeps the uncapped tracks from multiplying past their own cost growth', () => {
     // Income is the product of every track's effect, so uncapped tracks
@@ -77,6 +101,101 @@ describe('the stability rule', () => {
     const cheapestGrowth = Math.min(...uncapped.map((u) => u.costGrowth));
 
     expect(combinedEffect).toBeLessThan(cheapestGrowth);
+  });
+
+  it('caps every track added beyond the original uncapped pair', () => {
+    // The uncapped budget is nearly spent (1.1448 of 1.15), so any further
+    // track has to be capped. A capped track terminates and cannot compound.
+    const uncapped = UPGRADE_ORDER.filter((id) => BALANCE.upgrades[id].maxLevel === null);
+    expect(uncapped).toEqual(['shipSize', 'contracts']);
+
+    for (const id of UPGRADE_ORDER) {
+      const max = BALANCE.upgrades[id].maxLevel;
+      if (max !== null) expect(max).toBeGreaterThan(0);
+    }
+  });
+
+  it('bounds what the capped tracks can ever be worth', () => {
+    // Capped tracks are safe asymptotically, but their one-off multiplier is
+    // still real. This pins the total so a cap bump cannot quietly 100x the
+    // economy without someone noticing here.
+    const capped = UPGRADE_ORDER.map((id) => BALANCE.upgrades[id]).filter(
+      (u) => u.maxLevel !== null && u.effectPerLevel > 1,
+    );
+    const totalMultiplier = capped.reduce(
+      (acc, u) => acc * Math.pow(u.effectPerLevel, u.maxLevel!),
+      1,
+    );
+    expect(totalMultiplier).toBeLessThan(100);
+  });
+});
+
+describe('the new upgrade tracks', () => {
+  const rich = (): GameState => ({ ...createNewGame(0, BALANCE), money: 1e12 });
+
+  /** A one-port game at specific levels. Buy quantities are 1/10/max only. */
+  const atLevels = (levels: Partial<Record<UpgradeId, number>>): GameState => {
+    const base = rich();
+    return {
+      ...base,
+      ports: [{ ...base.ports[0], upgrades: { ...base.ports[0].upgrades, ...levels } }],
+    };
+  };
+
+  it('tugboats cut arrival time, which nothing else touches', () => {
+    const before = derivePortStats(rich().ports[0], 0, BALANCE);
+    const stats = derivePortStats(atLevels({ tugboats: 5 }).ports[0], 0, BALANCE);
+
+    expect(stats.arrivalSeconds).toBeLessThan(before.arrivalSeconds);
+    expect(stats.unloadSeconds).toBeCloseTo(before.unloadSeconds, 9);
+    expect(stats.moneyPerSecond).toBeGreaterThan(before.moneyPerSecond);
+  });
+
+  it('floodlights shorten both halves of the cycle', () => {
+    const before = derivePortStats(rich().ports[0], 0, BALANCE);
+    const stats = derivePortStats(atLevels({ floodlights: 5 }).ports[0], 0, BALANCE);
+
+    expect(stats.arrivalSeconds).toBeLessThan(before.arrivalSeconds);
+    expect(stats.unloadSeconds).toBeLessThan(before.unloadSeconds);
+  });
+
+  it('customs raises the price per unit', () => {
+    const before = derivePortStats(rich().ports[0], 0, BALANCE);
+    const stats = derivePortStats(atLevels({ customs: 3 }).ports[0], 0, BALANCE);
+
+    expect(stats.pricePerUnit).toBeGreaterThan(before.pricePerUnit);
+    expect(stats.cycleSeconds).toBeCloseTo(before.cycleSeconds, 9);
+  });
+
+  it('reports zero marginal gain once a timing track is pinned to its floor', () => {
+    // This is what the carousel keys off to grey a track out. Without it the
+    // player can keep paying for tugboats long after arrival has floored.
+    const floored = atLevels({ tugboats: 12, floodlights: 20, cranes: 30 });
+    const stats = derivePortStats(floored.ports[0], 0, BALANCE);
+    expect(stats.arrivalSeconds).toBe(BALANCE.berth.minArrivalSeconds);
+
+    const gain = incomeAfterBuying(floored, 'tugboats', 1, 0, BALANCE) - totalIncome(floored, BALANCE);
+    expect(gain).toBeLessThanOrEqual(0);
+  });
+
+  it('keeps a track useful right up to its cap when nothing else pushes it', () => {
+    // Tugboats alone must still be paying at their final level, or the cap is
+    // in the wrong place.
+    const nearCap = atLevels({ tugboats: BALANCE.upgrades.tugboats.maxLevel! - 1 });
+    const gain = incomeAfterBuying(nearCap, 'tugboats', 1, 0, BALANCE) - totalIncome(nearCap, BALANCE);
+    expect(gain).toBeGreaterThan(0);
+  });
+
+  it('keeps the cycle above its floors however maxed the timing tracks are', () => {
+    let s = rich();
+    for (const id of ['cranes', 'tugboats', 'floodlights'] as const) {
+      s = buyUpgrade(s, id, 'max', 0, BALANCE).state;
+    }
+    const stats = derivePortStats(s.ports[0], 0, BALANCE);
+
+    expect(stats.unloadSeconds).toBeGreaterThanOrEqual(BALANCE.berth.minUnloadSeconds);
+    expect(stats.arrivalSeconds).toBeGreaterThanOrEqual(BALANCE.berth.minArrivalSeconds);
+    expect(Number.isFinite(stats.moneyPerSecond)).toBe(true);
   });
 
   it('scales port yields and port upgrade costs by the same factor', () => {
@@ -113,9 +232,11 @@ describe('early game pacing', () => {
     }
   });
 
-  it('exercises all three upgrade tracks early, not just the cheapest', () => {
+  it('exercises every affordable track early, not just the cheapest', () => {
+    // Only the three cheap tracks are reachable in the first half hour; the
+    // rest of the carousel is deliberately still out of reach.
     const used = new Set(purchases.slice(0, 20).map((p) => p.label));
-    expect(used).toEqual(new Set(UPGRADE_ORDER));
+    expect(used).toEqual(new Set(['cranes', 'shipSize', 'contracts']));
   });
 
   it('does not let the player open a second port in the first half hour', () => {
@@ -136,36 +257,40 @@ describe('long-run economy', () => {
     }
   });
 
-  it('does not spiral into thousands of purchases per session', () => {
-    // A runaway tune bought ~6800 upgrades in an hour. A healthy one is
-    // a few hundred over four.
-    expect(purchases.length).toBeLessThan(1500);
+  it('does not spiral into an unbounded number of purchases', () => {
+    // A runaway tune bought ~6800 upgrades in ONE hour off a single port with
+    // three tracks. Six ports times six tracks legitimately buys far more, so
+    // this is only a coarse ceiling — the per-track gap below is the real
+    // runaway detector.
+    expect(purchases.length).toBeLessThan(20_000);
     expect(purchases.length).toBeGreaterThan(50);
   });
 
-  it('keeps per-port purchase gaps sane all the way out', () => {
-    // Gaps must be measured PER PORT. Purchases are aggregated across every
-    // port the player owns, so with six ports running the overall gap is
-    // naturally about six times tighter — which says nothing about whether any
-    // single port is pacing well.
-    const late = purchases.slice(-240).filter((p) => !p.isPort);
+  it('keeps per-track purchase gaps sane all the way out', () => {
+    // Gaps must be measured PER TRACK, per port. Purchases aggregate across
+    // every port AND every upgrade the player owns, so six ports times six
+    // tracks makes the overall gap about thirty-six times tighter — which says
+    // nothing about whether any one thing is pacing well. A genuine runaway
+    // shows up as THIS number collapsing toward zero.
+    const late = purchases.slice(-600).filter((p) => !p.isPort);
 
-    const perPort = new Map<number, number[]>();
+    const perTrack = new Map<string, number[]>();
     for (const p of late) {
-      const times = perPort.get(p.port) ?? [];
+      const key = `${p.port}:${p.label}`;
+      const times = perTrack.get(key) ?? [];
       times.push(p.atSeconds);
-      perPort.set(p.port, times);
+      perTrack.set(key, times);
     }
 
     const gaps: number[] = [];
-    for (const times of perPort.values()) {
+    for (const times of perTrack.values()) {
       for (let i = 1; i < times.length; i++) gaps.push(times[i] - times[i - 1]);
     }
 
     expect(gaps.length).toBeGreaterThan(20);
     const mean = gaps.reduce((a, b) => a + b, 0) / gaps.length;
-    expect(mean).toBeGreaterThan(20);
-    expect(mean).toBeLessThan(300);
+    expect(mean).toBeGreaterThan(30);
+    expect(mean).toBeLessThan(1200);
   });
 
   it('caps cranes and rotates the player onto the other tracks', () => {
