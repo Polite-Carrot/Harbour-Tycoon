@@ -5,6 +5,7 @@ import { affordability, deriveStats, incomeAfterBuying } from './src/sim/economy
 import { formatMoney, formatRate } from './src/sim/format';
 import { useGame } from './src/state/useGame';
 import { BerthView } from './src/ui/BerthView';
+import { PortScene } from './src/ui/port/PortScene';
 import { OfflineModal } from './src/ui/OfflineModal';
 import { UpgradeRow } from './src/ui/UpgradeRow';
 import { theme } from './src/ui/theme';
@@ -31,6 +32,8 @@ export default function App() {
           <Text style={styles.money}>{formatMoney(state.money)}</Text>
           <Text style={styles.rate}>{formatRate(stats.moneyPerSecond)}</Text>
         </View>
+
+        <PortScene state={state} stats={stats} />
 
         <BerthView state={state} stats={stats} />
 

@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 import type { DerivedStats, GameState } from '../sim/types';
-import { formatMoney, formatSeconds } from '../sim/format';
+import { formatMoney, formatNumber, formatSeconds } from '../sim/format';
 import { theme } from './theme';
 
 /** The one berth: shows which phase of the cycle it is in and how far along. */
@@ -40,7 +40,7 @@ export function BerthView({ state, stats }: { state: GameState; stats: DerivedSt
       <View style={styles.footerRow}>
         <Text style={styles.dim}>{formatSeconds(remaining)} left</Text>
         <Text style={styles.dim}>
-          {formatMoney(stats.cargoPerShip)} cargo · {formatMoney(stats.moneyPerShip)} / ship
+          {formatNumber(stats.cargoPerShip)} cargo · {formatMoney(stats.moneyPerShip)} / ship
         </Text>
       </View>
     </View>

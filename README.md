@@ -55,15 +55,48 @@ src/sim/                Pure simulation. No React, no storage, no clock.
   engine.ts             advance / catchUp / buyUpgrade / sanitise
   economy.ts            cost curves and derived stats
   policy.ts             "active player" model, shared by report + tests
-  format.ts             big-number and duration display
+  format.ts             big-number, currency and duration display
 src/state/              Persistence and the React lifecycle wiring
-src/ui/ + App.tsx       Presentation
+src/ui/                 Presentation
+  port/                 The animated harbour scene (SVG)
+App.tsx                 Screen composition
 scripts/balance-report.ts  Tuning harness
 ```
 
 The split that matters: `src/sim/` imports nothing from React, AsyncStorage or
 `Date.now()`. Time is always passed in. That is what makes the economy testable
 without a device and portable if the UI is ever replaced.
+
+## The port scene
+
+`src/ui/port/` draws a night harbour in SVG: ships sail in, moor, and are
+worked by gantry cranes while the container yard on the quay fills up.
+
+It is **derived from the simulation, not animated alongside it**. The scene
+recomputes its position in the berth cycle from the save's own clock —
+`berthCycleSeconds` as of `lastTickAt`, plus wall time since — so it holds no
+animation state of its own and can never drift from the economy. Pause the sim,
+reload, come back four hours later: the scene picks up wherever the maths says
+the ship should be.
+
+The sim ticks at 10Hz, which would make ships visibly stutter, so the scene
+keeps its own 45fps frame clock (`useSceneClock`). That only affects pixels —
+money still comes from the sim alone.
+
+What the upgrades actually look like:
+
+| upgrade | visible effect |
+|---|---|
+| Cranes | more gantries on the quay (1 -> 4), working faster |
+| Ship Size | bigger hulls, taller deck stacks |
+| Contracts | no direct visual — it is a price multiplier |
+
+Both ship dimensions **cap** well before the numbers do: ship size passes level
+130 within a few hours, so the art saturates around level 14 or the hull would
+grow off the edge of the scene. `geometry.test.ts` enforces the caps, that
+growth is monotonic up to them, and that a fully laden deck stack still passes
+under the crane booms — the invariant most easily broken by nudging one
+constant.
 
 ## How the simulation works
 

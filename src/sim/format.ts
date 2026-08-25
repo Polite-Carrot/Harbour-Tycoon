@@ -2,20 +2,35 @@
 
 const SUFFIXES = ['', 'K', 'M', 'B', 'T', 'Qa', 'Qi', 'Sx', 'Sp', 'Oc', 'No', 'Dc'];
 
-/** 1234567 -> "1.23M". Idle games live and die on readable big numbers. */
-export function formatMoney(value: number): string {
+/**
+ * 1234567 -> "1.23M". Plain number, no currency symbol — use this for counts
+ * (cargo units, ships). Idle games live and die on readable big numbers.
+ */
+export function formatNumber(value: number): string {
   if (!Number.isFinite(value)) return '0';
-  const sign = value < 0 ? '-' : '';
   const n = Math.abs(value);
 
-  if (n < 1000) {
-    return sign + (n < 10 ? n.toFixed(2) : n < 100 ? n.toFixed(1) : Math.floor(n).toString());
-  }
+  const body =
+    n < 1000
+      ? n < 10
+        ? n.toFixed(2)
+        : n < 100
+          ? n.toFixed(1)
+          : Math.floor(n).toString()
+      : (() => {
+          const tier = Math.min(Math.floor(Math.log10(n) / 3), SUFFIXES.length - 1);
+          const scaled = n / Math.pow(1000, tier);
+          const digits = scaled < 10 ? 2 : scaled < 100 ? 1 : 0;
+          return `${scaled.toFixed(digits)}${SUFFIXES[tier]}`;
+        })();
 
-  const tier = Math.min(Math.floor(Math.log10(n) / 3), SUFFIXES.length - 1);
-  const scaled = n / Math.pow(1000, tier);
-  const digits = scaled < 10 ? 2 : scaled < 100 ? 1 : 0;
-  return `${sign}${scaled.toFixed(digits)}${SUFFIXES[tier]}`;
+  return value < 0 ? `-${body}` : body;
+}
+
+/** 1234567 -> "$1.23M". The sign leads the symbol: -$5.00, not $-5.00. */
+export function formatMoney(value: number): string {
+  const n = formatNumber(value);
+  return n.startsWith('-') ? `-$${n.slice(1)}` : `$${n}`;
 }
 
 export function formatRate(perSecond: number): string {

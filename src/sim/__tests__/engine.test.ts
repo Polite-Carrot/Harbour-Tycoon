@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { BALANCE } from '../../config/balance';
 import { advance, buyUpgrade, catchUp, createNewGame, sanitise } from '../engine';
 import { cumulativeCost, deriveStats, upgradeCost } from '../economy';
-import { formatDuration, formatMoney } from '../format';
+import { formatDuration, formatMoney, formatNumber } from '../format';
 import type { GameState } from '../types';
 
 const fresh = (): GameState => createNewGame(0, BALANCE);
@@ -204,8 +204,20 @@ describe('formatting', () => {
   });
 
   it('scales big numbers with suffixes', () => {
-    expect(formatMoney(5760)).toBe('5.76K');
-    expect(formatMoney(11520)).toBe('11.5K');
-    expect(formatMoney(1.54e11)).toBe('154B');
+    expect(formatNumber(5760)).toBe('5.76K');
+    expect(formatNumber(11520)).toBe('11.5K');
+    expect(formatNumber(1.54e11)).toBe('154B');
+  });
+
+  it('prefixes money with a currency symbol, sign first', () => {
+    expect(formatMoney(5760)).toBe('$5.76K');
+    expect(formatMoney(0)).toBe('$0.00');
+    expect(formatMoney(-5.25)).toBe('-$5.25');
+    expect(formatMoney(-12.5)).toBe('-$12.5');
+  });
+
+  it('leaves counts unsymbolled, since cargo is not currency', () => {
+    expect(formatNumber(8)).toBe('8.00');
+    expect(formatNumber(-8)).toBe('-8.00');
   });
 });
