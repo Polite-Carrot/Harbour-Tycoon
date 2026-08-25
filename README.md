@@ -56,10 +56,13 @@ src/sim/                Pure simulation. No React, no storage, no clock.
   economy.ts            cost curves, port tiers, bulk-buy maths
   policy.ts             "active player" model, shared by report + tests
   format.ts             big-number, currency and duration display
+  stats.ts              the summary the settings panel reports
 src/state/              Persistence and the React lifecycle wiring
 src/ui/                 Presentation
   port/                 The animated harbour scene (SVG)
   Hud.tsx               Money and berth status, overlaid on the scene
+  SettingsButton.tsx    Gear cog, top right of the scene
+  SettingsModal.tsx     Lifetime stats, resume, guarded reset
   PortSwitcher.tsx      Owned ports + the buy-a-port card
   BuyDock.tsx           Upgrade tiles and the x1/x10/MAX selector
 App.tsx                 Screen composition
@@ -286,6 +289,29 @@ current: 1.08 * 1.06 = 1.1448  <  1.15
 asserting nothing overflows. Cranes are exempt: they're capped at level 30 and
 their effect asymptotes to the `minUnloadSeconds` floor, which is what rotates
 the player onto the other two tracks.
+
+## Settings
+
+A gear cog sits at the top right of the scene. It opens the Harbour Office:
+lifetime stats, **Resume**, and **Reset save**.
+
+Reset is guarded by an explicit confirmation that names what is about to be
+lost — lifetime earnings, ports, upgrades bought — before anything happens.
+Three details worth keeping if this is ever restyled:
+
+- The confirmation **swaps the panel's contents** rather than stacking a second
+  `Modal`. Nested modals are unreliable on react-native-web, and this keeps the
+  destructive action on a screen where nothing else is tappable.
+- **Cancel has equal visual weight** to the destructive button, so the safe
+  choice is never the harder target. The two also sit at different heights from
+  the "Reset save" link that opened the screen, so a stray second tap cannot
+  fall through onto the confirm.
+- Reopening settings always lands on the stats, never back on the
+  confirmation.
+
+The reported numbers come from `gameStats()`, a pure function in `src/sim/`,
+so the panel cannot invent a stat the sim disagrees with — there is a test
+asserting its income matches `totalIncome()` exactly.
 
 ## Save / load
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BALANCE, type UpgradeId } from '../../config/balance';
-import { advance, buyPort, buyUpgrade, catchUp, createNewGame, sanitise } from '../engine';
-import { bulkCost, cumulativeCost, deriveStats, maxAffordable, portCost, upgradeCost } from '../economy';
+import { advance, buyUpgrade, catchUp, createNewGame, sanitise } from '../engine';
+import { bulkCost, cumulativeCost, deriveStats, maxAffordable, upgradeCost } from '../economy';
 import { formatDuration, formatMoney, formatNumber } from '../format';
 import type { GameState } from '../types';
 

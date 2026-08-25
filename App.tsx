@@ -1,14 +1,16 @@
 import { useMemo, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
-import { BALANCE, UPGRADE_ORDER, type UpgradeId } from './src/config/balance';
+import { SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { UPGRADE_ORDER, type UpgradeId } from './src/config/balance';
 import { affordability, deriveStats, incomeAfterBuying, portName, totalIncome } from './src/sim/economy';
-import { formatMoney } from './src/sim/format';
+import { gameStats } from './src/sim/stats';
 import type { BuyQuantity } from './src/sim/types';
 import { useGame } from './src/state/useGame';
 import { UpgradeCarousel } from './src/ui/UpgradeCarousel';
 import { Hud } from './src/ui/Hud';
 import { OfflineModal } from './src/ui/OfflineModal';
+import { SettingsButton } from './src/ui/SettingsButton';
+import { SettingsModal } from './src/ui/SettingsModal';
 import { PortSwitcher } from './src/ui/PortSwitcher';
 import { PortScene } from './src/ui/port/PortScene';
 import { theme } from './src/ui/theme';
@@ -17,6 +19,7 @@ export default function App() {
   const { state, ready, offlineReport, buy, buyNewPort, choosePort, resetGame, dismissOfflineReport } =
     useGame();
   const [quantity, setQuantity] = useState<BuyQuantity>(1);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const view = useMemo(() => {
     if (!state) return null;
@@ -36,7 +39,7 @@ export default function App() {
       }),
     ) as Record<UpgradeId, number>;
 
-    return { index, port, stats, income, entries, gains };
+    return { index, port, stats, income, entries, gains, summary: gameStats(state) };
   }, [state, quantity]);
 
   if (!ready || !state || !view) {
@@ -67,6 +70,7 @@ export default function App() {
           port={view.port}
           stats={view.stats}
         />
+        <SettingsButton onPress={() => setSettingsOpen(true)} />
       </View>
 
       <View style={styles.controls}>
@@ -80,16 +84,17 @@ export default function App() {
           onBuy={(id) => buy(id, quantity)}
         />
 
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>
-            Lifetime {formatMoney(state.lifetimeEarnings)} · {portName(view.index)} cycle{' '}
-            {view.stats.cycleSeconds.toFixed(2)}s
-          </Text>
-          <Pressable onPress={() => void resetGame()} hitSlop={8}>
-            <Text style={styles.reset}>Reset</Text>
-          </Pressable>
-        </View>
       </View>
+
+      <SettingsModal
+        visible={settingsOpen}
+        stats={view.summary}
+        onResume={() => setSettingsOpen(false)}
+        onReset={() => {
+          setSettingsOpen(false);
+          void resetGame();
+        }}
+      />
 
       <OfflineModal report={offlineReport} onDismiss={dismissOfflineReport} />
       <StatusBar style="light" />
@@ -103,14 +108,5 @@ const styles = StyleSheet.create({
   // The harbour takes every pixel the controls do not need.
   scene: { flex: 1, width: '100%' },
   controls: { flexGrow: 0, paddingBottom: 4 },
-  footer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 14,
-    paddingTop: 6,
-  },
-  footerText: { color: theme.disabled, fontSize: 11 },
-  reset: { color: theme.disabled, fontSize: 11, fontWeight: '700' },
   dim: { color: theme.textDim, fontSize: 13 },
 });
