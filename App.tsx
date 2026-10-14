@@ -18,6 +18,8 @@ import { MetaBar } from './src/ui/MetaBar';
 import { VipBanner } from './src/ui/VipBanner';
 import { starsFor } from './src/sim/prestige';
 import { today } from './src/state/useGame';
+import { useRewardedAd } from './src/ads/rewardedAd';
+import { TimeWarpButton, TimeWarpModal } from './src/ui/TimeWarp';
 import { PortView } from './src/ui/port/PortView';
 import { theme } from './src/ui/theme';
 
@@ -35,7 +37,25 @@ export default function App() {
     claimDailyLogin,
     claimDailyContract,
     welcomeVip,
+    warp,
   } = useGame();
+  const ad = useRewardedAd();
+  const [warpOpen, setWarpOpen] = useState(false);
+  const [warpBusy, setWarpBusy] = useState(false);
+  const [warpCollected, setWarpCollected] = useState<number | null>(null);
+  const [warpStartedAt, setWarpStartedAt] = useState<number | undefined>(undefined);
+
+  const watchForWarp = async () => {
+    setWarpBusy(true);
+    const rewarded = await ad.show();
+    setWarpBusy(false);
+    if (!rewarded) return;
+    const paid = warp();
+    if (paid > 0) {
+      setWarpCollected(paid);
+      setWarpStartedAt(performance.now());
+    }
+  };
   const [officeOpen, setOfficeOpen] = useState(false);
   const [dailyOpen, setDailyOpen] = useState(false);
   const [quantity, setQuantity] = useState<BuyQuantity>(1);
@@ -80,6 +100,7 @@ export default function App() {
           portIndex={view.index}
           stats={view.stats}
           lastTickAt={state.lastTickAt}
+          warpStartedAt={warpStartedAt}
         />
         <Hud
           money={state.money}
@@ -92,6 +113,7 @@ export default function App() {
           boostUntil={state.boostUntil}
         />
         <VipBanner state={state} now={Date.now()} onWelcome={welcomeVip} />
+        <TimeWarpButton state={state} day={today()} now={Date.now()} onPress={() => setWarpOpen(true)} />
         <SettingsButton onPress={() => setSettingsOpen(true)} />
       </View>
 
@@ -142,6 +164,21 @@ export default function App() {
         onClaimContract={claimDailyContract}
         onClose={() => setDailyOpen(false)}
       />
+
+      <TimeWarpModal
+        visible={warpOpen && !ad.element}
+        state={state}
+        day={today()}
+        now={Date.now()}
+        collected={warpCollected}
+        busy={warpBusy}
+        onWatch={watchForWarp}
+        onClose={() => {
+          setWarpOpen(false);
+          setWarpCollected(null);
+        }}
+      />
+      {ad.element}
 
       <OfflineModal report={offlineReport} onDismiss={dismissOfflineReport} />
       <StatusBar style="dark" />

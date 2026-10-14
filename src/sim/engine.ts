@@ -26,6 +26,7 @@ import {
   startingLevels,
   startingMoney,
 } from './prestige';
+import { warpReward, warpStatus, warpsUsedToday } from './timewarp';
 import {
   SAVE_VERSION,
   type AdvanceResult,
@@ -67,6 +68,7 @@ export function createNewGame(
     daily: emptyDaily(),
     boostUntil: 0,
     totals: { ships: 0, upgrades: 0 },
+    timeWarp: { day: -1, used: 0, lastAt: 0 },
   };
 }
 
@@ -364,6 +366,27 @@ export function claimVip(
   return { state: applyReward({ ...state, daily: { ...state.daily, lastVipSlot: vip.slot } }, reward, now), reward };
 }
 
+/**
+ * Claim a Time Warp: a day of income at once. Call only after the rewarded
+ * ad has actually been watched. Refused (state unchanged) while on cooldown
+ * or once today's warps are spent.
+ */
+export function claimTimeWarp(
+  state: GameState,
+  day: number,
+  now: number,
+  cfg: BalanceConfig = BALANCE,
+): { state: GameState; earned: number } {
+  if (!warpStatus(state, day, now, cfg).ready) return { state, earned: 0 };
+  const earned = warpReward(state, cfg);
+  if (!Number.isFinite(earned) || earned <= 0) return { state, earned: 0 };
+  const next = applyReward(state, { money: earned, stars: 0, boostSeconds: 0 }, now);
+  return {
+    state: { ...next, timeWarp: { day, used: warpsUsedToday(state, day) + 1, lastAt: now } },
+    earned,
+  };
+}
+
 export function selectPort(state: GameState, index: number): GameState {
   if (index < 0 || index >= state.ports.length || index === state.activePort) return state;
   return { ...state, activePort: index };
@@ -416,6 +439,7 @@ export function sanitise(
   const p = (r.prestige ?? {}) as Record<string, unknown>;
   const d = (r.daily ?? {}) as Record<string, unknown>;
   const t = (r.totals ?? {}) as Record<string, unknown>;
+  const w = (r.timeWarp ?? {}) as Record<string, unknown>;
   const kinds = ['ships', 'upgrades', 'earn'] as const;
   const contracts: Contract[] = (Array.isArray(d.contracts) ? d.contracts : [])
     .slice(0, 3)
@@ -453,6 +477,13 @@ export function sanitise(
     totals: {
       ships: Math.max(0, num(t.ships, 0)),
       upgrades: Math.max(0, num(t.upgrades, 0)),
+    },
+    timeWarp: {
+      day: Math.floor(num(w.day, -1)),
+      used: Math.max(0, Math.floor(num(w.used, 0))),
+      // A last-warp time in the future (clock moved back) would lock the
+      // player out; clamp it to now.
+      lastAt: Math.min(Math.max(0, num(w.lastAt, 0)), now),
     },
   };
 }

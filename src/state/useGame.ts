@@ -9,6 +9,7 @@ import {
   catchUp,
   claimContract,
   claimLogin,
+  claimTimeWarp,
   claimVip,
   createNewGame,
   selectPort,
@@ -222,6 +223,17 @@ export function useGame() {
     });
   }, [act]);
 
+  /** Pay a Time Warp. Returns what it paid (0 if refused). Call after the ad. */
+  const warp = useCallback((): number => {
+    let paid = 0;
+    act((s) => {
+      const r = claimTimeWarp(s, today(), Date.now());
+      paid = r.earned;
+      return { state: r.state, changed: r.earned > 0 };
+    });
+    return paid;
+  }, [act]);
+
   const resetGame = useCallback(async () => {
     await clearSave();
     commit(createNewGame(Date.now()));
@@ -243,5 +255,6 @@ export function useGame() {
     claimDailyLogin,
     claimDailyContract,
     welcomeVip,
+    warp,
   };
 }

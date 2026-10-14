@@ -87,6 +87,20 @@ Rewards are paid as minutes of current income, so they matter at every stage.
 Contracts, VIP visits and streak days are all deterministic and seeded from
 the date (local midnight), so they need no server.
 
+**Time Warp (rewarded ad).** The ⏩ pill in the top-left corner offers a
+day of income at once (current rate × 24h) for watching a rewarded ad: up to
+3 a day, at least 2 hours apart. The harbour plays a quick time-lapse of the
+day as it pays out. Rules in `src/sim/timewarp.ts`, tuning in
+`BALANCE.timeWarp`.
+
+The ad itself sits behind `src/ads/rewardedAd.tsx`, which currently shows a
+clearly labelled **test ad** (a 15-second countdown, no ad network). Going
+live means swapping that one file for a real provider, keeping its contract
+(resolve `true` only on the network's "reward earned" event):
+`react-native-google-mobile-ads` for the apps (needs an EAS dev build and an
+AdMob account), or a web rewarded-ad network for the browser build (Google's
+H5 games ads need an approved AdSense site on your own domain).
+
 Native builds (Expo Go) still draw the flat 2D SVG harbour; `PortView.tsx` /
 `PortView.web.tsx` pick the right one per platform. If a browser cannot create
 a WebGL context, the web build falls back to the 2D scene as well.
@@ -145,6 +159,8 @@ src/sim/                Pure simulation. No React, no storage, no clock.
                         / claim rewards / sanitise
   prestige.ts           Reputation stars, perks, the income multiplier
   daily.ts              login streak, daily contracts, VIP visits (seeded)
+  timewarp.ts           rewarded-ad Time Warp: limits and payout
+src/ads/                Rewarded-ad provider (a test ad for now)
   economy.ts            cost curves, port tiers, bulk-buy maths
   policy.ts             "active player" model, shared by report + tests
   format.ts             big-number, currency and duration display
@@ -463,7 +479,7 @@ asserting its income matches `totalIncome()` exactly.
 
 ## Deliberately not built yet
 
-Ads, IAP, sound, analytics, achievements — all out of scope for now.
+Live ads (only the test ad exists), IAP, sound, analytics, achievements — out of scope for now.
 
 Prestige is in (`src/sim/prestige.ts`, `sellCompany` in the engine): the
 Reputation multiplier is applied in `derivePortStats` via `totalIncome` /

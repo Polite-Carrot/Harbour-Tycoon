@@ -121,6 +121,18 @@ export interface BalanceConfig {
     readonly vipSeconds: number;
     readonly vipMinutes: number;
   };
+  /**
+   * Time Warp: watch a rewarded ad to collect a stretch of income at once.
+   * Limited, so it is a treat rather than the way to play.
+   */
+  readonly timeWarp: {
+    /** How much income one warp pays, in seconds of the current rate. */
+    readonly seconds: number;
+    /** Warps allowed per local day. */
+    readonly perDay: number;
+    /** Minimum gap between warps. */
+    readonly cooldownSeconds: number;
+  };
   readonly runtime: {
     /** How often the UI recomputes. Display cadence only — the sim is
      *  time-based, so this never changes how much money you earn. */
@@ -356,6 +368,14 @@ export const BALANCE: BalanceConfig = {
     vipPeriodSeconds: 15 * 60,
     vipSeconds: 120,
     vipMinutes: 10,
+  },
+
+  timeWarp: {
+    // A full day of income. Early on that is an hour or two of progress;
+    // late in a run, when income doubles every few minutes, it is a nudge.
+    seconds: 24 * 60 * 60,
+    perDay: 3,
+    cooldownSeconds: 2 * 60 * 60,
   },
 
   runtime: {
