@@ -38,9 +38,13 @@ On the web the port is a full 3D scene (three.js) you can explore:
   and schools of fish mill under the surface (now and then one jumps). A
   prompt pops up when a whale breaches; tap **Look** to fly the camera there.
 
-The scene is driven entirely by the simulation (`src/ui/port/timeline.ts`):
-ship position, cargo aboard and crane work are recomputed from the save every
-frame, so the picture can never drift from the money.
+**Ship handling.** Ships come in parallel to the quay and stop off the berth;
+tugs (from the first Tugboats level, a pair from level 4) meet them, push them
+sideways onto the berth, stand by during unloading, haul them off on towlines
+and cruise back to meet the next ship. The economy's cargo cycle runs far
+faster than any real berthing could, so the 3D berth runs its own steady
+routine (`src/ui/port3d/berthing.ts`) while the money, the HUD and the "+$"
+pops still follow the simulation exactly.
 
 Native builds (Expo Go) still draw the flat 2D SVG harbour; `PortView.tsx` /
 `PortView.web.tsx` pick the right one per platform. If a browser cannot create

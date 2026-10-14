@@ -21,12 +21,7 @@ interface Props {
  * Overlay on top of the scene: money, income, and what the berth is doing.
  * Sits over the art rather than beside it so the harbour stays the whole view.
  */
-export function Hud({ money, totalIncome, portLabel, portIndex, portCount, port, stats }: Props) {
-  const pos = port.berthCycleSeconds;
-  const unloading = pos >= stats.arrivalSeconds;
-  const remaining = unloading
-    ? stats.arrivalSeconds + stats.unloadSeconds - pos
-    : stats.arrivalSeconds - pos;
+export function Hud({ money, totalIncome, portLabel, portIndex, portCount, stats }: Props) {
 
   // The HUD re-renders with every sim tick, which is plenty for a clock.
   const tod = timeOfDay(Date.now());
@@ -61,10 +56,9 @@ export function Hud({ money, totalIncome, portLabel, portIndex, portCount, port,
         </View>
 
         <View style={styles.chip}>
-          <Text style={[styles.chipStrong, { color: unloading ? theme.good : theme.accent }]}>
-            {unloading ? 'UNLOADING' : 'INBOUND'}
-          </Text>
-          <Text style={styles.chipDim}>{formatSeconds(Math.max(0, remaining))}</Text>
+          {/* The 3D berth runs at its own pace; this is the economy's. */}
+          <Text style={[styles.chipStrong, { color: theme.good }]}>CARGO RUN</Text>
+          <Text style={styles.chipDim}>every {formatSeconds(stats.cycleSeconds)}</Text>
         </View>
 
         <View style={styles.chip}>

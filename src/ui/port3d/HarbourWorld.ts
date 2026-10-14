@@ -1,15 +1,16 @@
 import * as THREE from 'three';
 import type { DerivedStats, PortState } from '../../sim/types';
 import { skyAt, timeOfDay, type Sky } from '../port/daylight';
-import { containerRows, craneCount, easeInCubic, easeOutCubic, shipScale } from '../port/geometry';
+import { containerRows, craneCount, shipScale } from '../port/geometry';
 import { berthMoment } from '../port/timeline';
 import { Crane } from './crane';
 import { liveryFor } from './palette';
 import { PortLand } from './port';
-import { HULL_BEAM, HULL_LENGTH, ShipModel, buildTug } from './ship';
+import { berthZ as berthZOf, shipsAt, tugsAt } from './berthing';
+import { DECK_Y, HULL_BEAM, HULL_LENGTH, ShipModel, buildTug } from './ship';
 import { SeaLife, type Sighting } from './sealife';
 import { SkyLayer } from './sky';
-import { disposeTree, lerp, smoothstep } from './util';
+import { disposeTree } from './util';
 import { Water } from './water';
 
 export interface WorldInput {
@@ -19,11 +20,6 @@ export interface WorldInput {
   /** Epoch millis the port state is accurate as of. */
   lastTickAt: number;
 }
-
-/** Where ships come from and go to, along the quay line. */
-const SEA_WEST = -470;
-const SEA_EAST = 540;
-const APPROACH_Z = -50;
 
 /** The point the camera looks at when it is centred on the berth. */
 export const HOME_TARGET = new THREE.Vector3(0, 6, 22);
@@ -68,6 +64,8 @@ export class HarbourWorld {
   private readonly sea = new SeaLife();
   private lastSighting = -99;
   private readonly tmp = new THREE.Vector3();
+  private readonly tmp2 = new THREE.Vector3();
+  private readonly towlines: THREE.Mesh[] = [];
 
   /** Seconds of scenery time. Kept small so shader floats stay precise. */
   private t = 0;
@@ -97,6 +95,10 @@ export class HarbourWorld {
       tug.visible = false;
       this.tugs.push(tug);
       s.add(tug);
+      const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 1, 5), new THREE.MeshStandardMaterial({ color: 0xe8dcc0, roughness: 0.9 }));
+      rope.visible = false;
+      this.towlines.push(rope);
+      s.add(rope);
     }
   }
 
@@ -146,61 +148,63 @@ export class HarbourWorld {
       this.ships.forEach((sh) => this.scene.add(sh.group));
       this.shipKey = shipKey;
     }
-    const [ship, leaving] = this.ships;
-    const m = berthMoment(port, stats, lastTickAt, now);
-    const berthZ = -(HULL_BEAM / 2) * scale - 2.4;
-
-    const inbound = (p: number) => ({
-      x: lerp(SEA_WEST, 0, easeOutCubic(p)),
-      z: lerp(APPROACH_Z, berthZ, smoothstep(0.15, 0.8, p)),
-    });
-    const outbound = (p: number) => ({
-      x: lerp(0, SEA_EAST, easeInCubic(p)),
-      z: lerp(berthZ, APPROACH_Z, smoothstep(0.18, 0.7, p)),
-    });
-
-    const inP = m.arriving ? m.arriveP : 1;
-    this.placeShip(ship, inbound, inP, scale, t, 0);
-    ship.setCargo(m.cargo);
-    ship.setWake(m.arriving ? Math.pow(1 - inP, 0.7) * smoothstep(0, 0.05, inP) : 0);
-    ship.setNight(sky.lamps);
-    ship.group.visible = !(m.arriving && inP <= 0);
-
-    leaving.group.visible = m.showDeparting;
-    if (m.showDeparting) {
-      this.placeShip(leaving, outbound, m.departP, scale, t, 1.7);
-      leaving.setCargo(0);
-      leaving.setWake(smoothstep(0, 0.3, m.departP));
-      leaving.setNight(sky.lamps);
+    // The 3D berth runs its own steady routine (see berthing.ts); money
+    // still follows the sim, via the payout below.
+    const seconds = now / 1000;
+    const poses = shipsAt(seconds, scale);
+    const models = this.ships;
+    models.forEach((sh) => (sh.group.visible = false));
+    let moored: { model: ShipModel; cargo: number } | null = null;
+    const byIndex = new Map<number, ShipModel>();
+    for (const pose of poses) {
+      // Each ship keeps one model for her whole life, so nothing swaps mid-move.
+      const model = models[((pose.index % 2) + 2) % 2];
+      byIndex.set(pose.index, model);
+      const g = model.group;
+      g.visible = true;
+      g.scale.setScalar(scale);
+      const phase = pose.index * 1.7;
+      g.position.set(pose.x, this.water.heightAt(pose.x, pose.z, t) * 0.5 + Math.sin(t * 0.9 + phase) * 0.15, pose.z);
+      g.rotation.set(Math.sin(t * 0.7 + phase) * 0.012, pose.yaw, Math.sin(t * 1.1 + phase) * 0.01);
+      model.setCargo(pose.cargo);
+      model.setWake(Math.min(1, pose.speed / 18 + pose.sideways / 3));
+      model.setNight(sky.lamps);
+      model.animate(t);
+      if (pose.phase === 'moored') moored = { model, cargo: pose.cargo };
     }
-
-    ship.animate(t);
-    leaving.animate(t);
-    this.wakeFor(0, ship, scale);
-    this.wakeFor(1, leaving, scale);
+    models.forEach((sh, slot) => this.wakeFor(slot, sh, scale));
+    const berthZ = berthZOf(scale);
 
     // --- sea life ----------------------------------------------------------------
     this.sea.update(t, Math.min(dt, 0.1), heightAt);
 
     // --- tugs ------------------------------------------------------------------
-    const tugCount = Math.min(2, Math.ceil(up.tugboats / 6));
-    const escorting = m.arriving && inP > 0 ? ship : m.showDeparting ? leaving : ship;
-    const alongside = !m.arriving;
+    // One tug from the first level, a pair from level 4. They meet each ship,
+    // push her in, stand by, tow her off and go back for the next.
+    const tugCount = up.tugboats >= 4 ? 2 : up.tugboats >= 1 ? 1 : 0;
+    const tugPoses = tugsAt(seconds, scale, tugCount);
     this.tugs.forEach((tug, i) => {
-      tug.visible = i < tugCount && escorting.group.visible;
-      if (!tug.visible) return;
-      const g = escorting.group;
-      const L = HULL_LENGTH / 2;
-      const B = HULL_BEAM / 2;
-      // Underway: one tows from the bow, one shepherds the stern. Moored:
-      // both nose against the seaward side, holding her in.
-      const local = alongside
-        ? new THREE.Vector3(i ? -L * 0.5 : L * 0.5, 0, -B - 5)
-        : new THREE.Vector3(i ? -L - 6 : L + 14, 0, i ? -B - 2 : 0);
-      const world = g.localToWorld(local);
-      world.y = heightAt(world.x, world.z) + 0.2;
-      tug.position.copy(world);
-      tug.rotation.set(0, g.rotation.y + (alongside ? -Math.PI / 2 : 0), Math.sin(t * 2 + i) * 0.04);
+      const pose = tugPoses[i];
+      tug.visible = !!pose;
+      this.towlines[i].visible = false;
+      if (!pose) {
+        this.water.setWake(2 + i, 0, 0, 0, 0, 1, 1);
+        return;
+      }
+      tug.position.set(pose.x, heightAt(pose.x, pose.z) + 0.15, pose.z);
+      tug.rotation.set(Math.sin(t * 1.3 + i) * 0.03, pose.yaw, Math.sin(t * 2 + i) * 0.04 + pose.effort * 0.03);
+      // Prop wash: the sea draws it behind the stern.
+      const fx = Math.cos(pose.yaw);
+      const fz = -Math.sin(pose.yaw);
+      this.water.setWake(2 + i, pose.x - fx * 7, pose.z - fz * 7, -pose.yaw, pose.effort * 0.55, 2.8, 15);
+
+      const ship = byIndex.get(pose.ship);
+      if (pose.line && ship) {
+        const from = tug.localToWorld(this.tmp.set(-6.4, 2.6, 0));
+        const to = ship.group.localToWorld(this.tmp2.set(pose.line.x / scale, DECK_Y - 0.6, pose.line.z / scale));
+        placeRope(this.towlines[i], from, to);
+        this.towlines[i].visible = true;
+      }
     });
 
     // --- cranes ----------------------------------------------------------------
@@ -218,13 +222,15 @@ export class HarbourWorld {
     // Cranes run on rails, so they spread along whatever hull is alongside.
     const span = Math.max(52 * scale, count * 15);
     const craneSpeed = (0.5 + up.cranes * 0.035) * 0.55;
-    const pickY = ship.group.position.y + ship.cargoTopY(m.cargo) * scale;
+    const pickY = moored ? moored.model.group.position.y + moored.model.cargoTopY(moored.cargo) * scale : 0;
     this.cranes.forEach((c, i) => {
       c.group.position.x = 2 * scale - span / 2 + span * ((i + 0.5) / count);
-      c.update(t * craneSpeed + i * 0.37, !m.arriving, berthZ, pickY, sky.lamps);
+      c.update(t * craneSpeed + i * 0.37, !!moored && moored.cargo > 0.02, berthZ, pickY, sky.lamps);
     });
 
     // --- payout ----------------------------------------------------------------
+    // Money is the sim's: a pop each time the economy completes a cargo run.
+    const m = berthMoment(port, stats, lastTickAt, now);
     this.payout.visible = m.showPayout;
     this.payout.p = m.payoutP;
     this.payout.amount = stats.moneyPerShip;
@@ -256,28 +262,6 @@ export class HarbourWorld {
     return s;
   }
 
-  private placeShip(
-    ship: ShipModel,
-    path: (p: number) => { x: number; z: number },
-    p: number,
-    scale: number,
-    t: number,
-    phase: number,
-  ) {
-    const a = path(p);
-    const b = path(Math.min(1, p + 0.01));
-    const c = path(Math.max(0, p - 0.01));
-    const dx = b.x - c.x;
-    const dz = b.z - c.z;
-    const g = ship.group;
-    g.scale.setScalar(scale);
-    g.position.set(a.x, this.water.heightAt(a.x, a.z, t) * 0.5 + Math.sin(t * 0.9 + phase) * 0.15, a.z);
-    // Near the berth both derivatives vanish and their ratio is noise, so
-    // only steer while actually under way, and never more than a gentle turn.
-    const yaw = Math.abs(dx) > 0.05 ? THREE.MathUtils.clamp(Math.atan2(-dz, dx), -0.35, 0.35) : 0;
-    g.rotation.set(Math.sin(t * 0.7 + phase) * 0.012, yaw, Math.sin(t * 1.1 + phase) * 0.01);
-  }
-
   private disposeShips() {
     if (!this.ships) return;
     for (const sh of this.ships) {
@@ -296,4 +280,17 @@ export class HarbourWorld {
     this.disposeShips();
     disposeTree(this.scene);
   }
+}
+
+const UP = new THREE.Vector3(0, 1, 0);
+const _dir = new THREE.Vector3();
+
+/** Stretch a unit cylinder between two points, with a little sag. */
+function placeRope(rope: THREE.Mesh, a: THREE.Vector3, b: THREE.Vector3) {
+  _dir.subVectors(b, a);
+  const len = _dir.length();
+  rope.position.copy(a).addScaledVector(_dir, 0.5);
+  rope.position.y -= Math.min(1.2, len * 0.04);
+  rope.quaternion.setFromUnitVectors(UP, _dir.normalize());
+  rope.scale.set(1, len, 1);
 }
