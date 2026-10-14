@@ -130,7 +130,7 @@ export class HarbourWorld {
     this.water.update(t, sky, this.skyLayer.lightDir, sky.sunIntensity * this.skyLayer.lightHeight);
 
     const heightAt = (x: number, z: number) => this.water.heightAt(x, z, t);
-    this.land.update(t, sky.lamps, up, heightAt);
+    this.land.update(t, sky.lamps, up, heightAt, tod);
 
     // --- ships -----------------------------------------------------------------
     const scale = shipScale(up.shipSize);

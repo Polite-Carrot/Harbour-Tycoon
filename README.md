@@ -27,6 +27,12 @@ On the web the port is a full 3D scene (three.js) you can explore:
   outside), sky reflections, sun glitter, whitecaps, foam on the quay, beach
   and breakwater, and ship wakes drawn into the water. The water is slightly
   see-through, so you can see what is swimming under it.
+- **A living town.** A street grid with pavements, crossings, street trees
+  and lamps; blocks of shops (lit windows, awnings) and flats; a market square
+  with a fountain, stalls, café, bunting and pigeons; and a town hall whose
+  clock tower keeps harbour time. A few hundred people walk the pavements,
+  stroll the square, chat, shop and sit at the café, some with dogs, while
+  cars circle the blocks and buses run the ring road (lights on at night).
 - **Sea life.** A dolphin pod porpoises through the harbour, humpback whales
   blow, dive tail-up and breach out at sea, sharks patrol with their fins out,
   and schools of fish mill under the surface (now and then one jumps). A
@@ -101,7 +107,8 @@ src/ui/                 Presentation
     timeline.ts         Berth cycle -> ship/cargo/payout at any instant
     daylight.ts         Day/night clock and sky colours (pure, tested)
   port3d/               The three.js harbour: world, sky, water, ship, crane, land,
-                        containers, sealife (dolphins, whales, sharks, fish)
+                        containers, sealife (dolphins, whales, sharks, fish),
+                        town (streets, square, town hall, people, traffic)
   Hud.tsx               Money and berth status, overlaid on the scene
   SettingsButton.tsx    Gear cog, top right of the scene
   SettingsModal.tsx     Lifetime stats, resume, guarded reset

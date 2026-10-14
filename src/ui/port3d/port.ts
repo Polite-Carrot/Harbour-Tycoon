@@ -1,8 +1,9 @@
 import * as THREE from 'three';
-import { COLOURS, CONTAINERS, ROOFS, WALLS } from './palette';
+import { COLOURS, CONTAINERS } from './palette';
 import { GROUND_Y } from './crane';
 import { containerGeometry, containerMaterial, containerMesh } from './containers';
 import { buildSailboat } from './ship';
+import { Town } from './town';
 import { box, gableRoof, glowSprite, hash, mat, strut } from './util';
 
 /** Floodlight masts, centre-out, so the first few light the berth. */
@@ -67,6 +68,7 @@ export class PortLand {
   private readonly beamMat: THREE.MeshBasicMaterial;
   private readonly lanternMat: THREE.MeshStandardMaterial;
   private readonly streetGlows: THREE.Sprite[] = [];
+  private town!: Town;
   private readonly buoys: { g: THREE.Group; x: number; z: number; light: THREE.Sprite; phase: number }[] = [];
   private readonly trucks: THREE.Group[] = [];
   private readonly rtgs: THREE.Group[] = [];
@@ -221,80 +223,16 @@ export class PortLand {
     }
   }
 
+  /** Coastal trees and lamps either side of the port. The town itself
+   *  (streets, square, people, traffic) lives in town.ts. */
   private buildTown() {
-    const walls: Instance[] = [];
-    const roofs: Instance[] = [];
-    const caps: Instance[] = [];
-    const windowsLit: Instance[] = [];
-    const windowsDark: Instance[] = [];
     const trunks: Instance[] = [];
     const canopies: Instance[] = [];
-
-    let n = 0;
-    for (let z = 116; z < 300; z += 24) {
-      for (let x = -420; x <= 420; x += 19) {
-        n++;
-        const r = hash(n * 1.37);
-        // Leave gaps for parks — filled with trees.
-        if (r < 0.14 || (Math.abs(x) < 40 && z < 140)) {
-          this.tree(trunks, canopies, x + hash(n) * 6, z + hash(n + 1) * 6, n);
-          this.tree(trunks, canopies, x - 5 + hash(n + 2) * 4, z - 6, n + 7);
-          continue;
-        }
-        const tall = Math.abs(x) < 150 && z < 200 && hash(n * 2.9) > 0.55;
-        const w = 10 + hash(n + 3) * 5;
-        const d = 10 + hash(n + 4) * 6;
-        const h = tall ? 18 + hash(n + 5) * 22 : 6 + hash(n + 6) * 6;
-        const cx = x + (hash(n + 8) - 0.5) * 3;
-        const cz = z + (hash(n + 9) - 0.5) * 4;
-        const wall = tall ? [0xffffff, 0xd0ebff, 0xfff3bf, 0xe5dbff][n % 4] : WALLS[n % WALLS.length];
-        walls.push({ m: trs(cx, GROUND_Y + h / 2, cz, w, h, d), c: wall });
-        const roofColour = ROOFS[Math.floor(hash(n + 11) * ROOFS.length)];
-        if (tall) caps.push({ m: trs(cx, GROUND_Y + h + 0.4, cz, w + 0.6, 0.8, d + 0.6), c: roofColour });
-        else roofs.push({ m: trs(cx, GROUND_Y + h, cz, w + 1, 3 + hash(n) * 2, d + 1), c: roofColour });
-
-        // Windows on the seaward face, in floors.
-        const floors = Math.max(1, Math.floor((h - 2) / 3.4));
-        const cols = Math.max(1, Math.floor(w / 3.2));
-        for (let f = 0; f < floors; f++) {
-          for (let c = 0; c < cols; c++) {
-            const wx = cx - w / 2 + (c + 0.5) * (w / cols);
-            const wy = GROUND_Y + 2.4 + f * 3.4;
-            const target = hash(n * 13 + f * 5 + c) < 0.6 ? windowsLit : windowsDark;
-            target.push({ m: trs(wx, wy, cz - d / 2 - 0.05, 1.4, 1.6, 0.2), c: 0xffffff });
-          }
-        }
-      }
-    }
-
-    // Trees along the coast and the shed road.
     for (let x = -400; x <= 400; x += 14) {
       if (Math.abs(x) < 175) continue;
       this.tree(trunks, canopies, x + hash(x) * 5, 50 + hash(x + 1) * 40, x + 500);
     }
-    for (let x = -165; x <= 165; x += 22) this.tree(trunks, canopies, x, 106, x + 900);
-
-    const roofGeo = (() => {
-      const shape = new THREE.Shape();
-      shape.moveTo(-0.5, 0);
-      shape.lineTo(0.5, 0);
-      shape.lineTo(0, 1);
-      shape.closePath();
-      const geo = new THREE.ExtrudeGeometry(shape, { depth: 1, bevelEnabled: false });
-      geo.translate(0, 0, -0.5);
-      geo.rotateY(Math.PI / 2);
-      // Unit prism: x is length, z depth, y rise. Swap so instance scale
-      // (w, h, d) reads naturally.
-      return geo;
-    })();
-
     const g = this.group;
-    const plain = mat(0xffffff, { roughness: 0.8 });
-    g.add(instanced(new THREE.BoxGeometry(1, 1, 1), plain, walls));
-    g.add(instanced(roofGeo, mat(0xffffff, { roughness: 0.6 }), roofs));
-    g.add(instanced(new THREE.BoxGeometry(1, 1, 1), mat(0xffffff, { roughness: 0.6 }), caps));
-    g.add(instanced(new THREE.BoxGeometry(1, 1, 1), this.windowMat, windowsLit, false));
-    g.add(instanced(new THREE.BoxGeometry(1, 1, 1), mat(0x4a6488, { roughness: 0.3 }), windowsDark, false));
     g.add(instanced(new THREE.CylinderGeometry(0.4, 0.55, 1, 6), mat(COLOURS.trunk), trunks));
     g.add(instanced(new THREE.IcosahedronGeometry(1, 0), mat(0xffffff, { flatShading: true, roughness: 0.8 }), canopies));
 
@@ -315,6 +253,9 @@ export class PortLand {
       this.streetGlows.push(s);
       g.add(s);
     }
+
+    this.town = new Town(this.windowMat);
+    g.add(this.town.group);
   }
 
   private tree(trunks: Instance[], canopies: Instance[], x: number, z: number, seed: number) {
@@ -624,7 +565,10 @@ export class PortLand {
     lamps: number,
     upgrades: { floodlights: number; customs: number; contracts: number },
     heightAt: (x: number, z: number) => number,
+    tod = 0.5,
   ) {
+    this.town.update(t, lamps, tod);
+
     // Night glow: windows, lamps, lighthouse.
     this.windowMat.emissiveIntensity = 0.05 + lamps * 1.6;
     this.lanternMat.emissiveIntensity = 0.3 + lamps * 2.2;
