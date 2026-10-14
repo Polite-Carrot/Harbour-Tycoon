@@ -7,6 +7,7 @@ import { Crane } from './crane';
 import { liveryFor } from './palette';
 import { PortLand } from './port';
 import { HULL_BEAM, HULL_LENGTH, ShipModel, buildTug } from './ship';
+import { SeaLife, type Sighting } from './sealife';
 import { SkyLayer } from './sky';
 import { disposeTree, lerp, smoothstep } from './util';
 import { Water } from './water';
@@ -64,6 +65,9 @@ export class HarbourWorld {
   private readonly craneGroup = new THREE.Group();
   private craneKey = '';
   private readonly tugs: THREE.Group[] = [];
+  private readonly sea = new SeaLife();
+  private lastSighting = -99;
+  private readonly tmp = new THREE.Vector3();
 
   /** Seconds of scenery time. Kept small so shader floats stay precise. */
   private t = 0;
@@ -71,7 +75,7 @@ export class HarbourWorld {
   constructor() {
     const s = this.scene;
     s.fog = this.fog;
-    s.add(this.skyLayer.group, this.water.group, this.land.group, this.craneGroup);
+    s.add(this.skyLayer.group, this.water.group, this.land.group, this.craneGroup, this.sea.group);
 
     s.add(this.hemi);
     this.keyLight.castShadow = true;
@@ -123,7 +127,7 @@ export class HarbourWorld {
     this.keyLight.color.setHex(sky.sun);
     this.keyLight.intensity = sky.sunIntensity * this.skyLayer.lightHeight;
     this.keyLight.position.copy(this.keyLight.target.position).addScaledVector(this.skyLayer.lightDir, 600);
-    this.water.update(t, sky.water);
+    this.water.update(t, sky, this.skyLayer.lightDir, sky.sunIntensity * this.skyLayer.lightHeight);
 
     const heightAt = (x: number, z: number) => this.water.heightAt(x, z, t);
     this.land.update(t, sky.lamps, up, heightAt);
@@ -136,8 +140,8 @@ export class HarbourWorld {
     if (shipKey !== this.shipKey || !this.ships) {
       this.disposeShips();
       this.ships = [
-        new ShipModel(livery, tiers, this.land.windowMat),
-        new ShipModel(livery, tiers, this.land.windowMat),
+        new ShipModel(livery, tiers, this.land.windowMat, portIndex),
+        new ShipModel(livery, tiers, this.land.windowMat, portIndex + 3),
       ];
       this.ships.forEach((sh) => this.scene.add(sh.group));
       this.shipKey = shipKey;
@@ -169,6 +173,14 @@ export class HarbourWorld {
       leaving.setWake(smoothstep(0, 0.3, m.departP));
       leaving.setNight(sky.lamps);
     }
+
+    ship.animate(t);
+    leaving.animate(t);
+    this.wakeFor(0, ship, scale);
+    this.wakeFor(1, leaving, scale);
+
+    // --- sea life ----------------------------------------------------------------
+    this.sea.update(t, Math.min(dt, 0.1), heightAt);
 
     // --- tugs ------------------------------------------------------------------
     const tugCount = Math.min(2, Math.ceil(up.tugboats / 6));
@@ -217,6 +229,31 @@ export class HarbourWorld {
     this.payout.p = m.payoutP;
     this.payout.amount = stats.moneyPerShip;
     this.payout.position.set(0, 42 + m.payoutP * 14, berthZ);
+  }
+
+  /** Hand a ship's stern and heading to the sea so it draws her wake. */
+  private wakeFor(slot: number, ship: ShipModel, scale: number) {
+    const g = ship.group;
+    if (!g.visible || ship.wake <= 0.01) {
+      this.water.setWake(slot, 0, 0, 0, 0, 1, 1);
+      return;
+    }
+    const stern = g.localToWorld(this.tmp.set(-HULL_LENGTH / 2, 0, 0));
+    this.water.setWake(slot, stern.x, stern.z, -g.rotation.y, ship.wake, (HULL_BEAM / 2) * scale, HULL_LENGTH * scale);
+  }
+
+  /** The ships currently on screen (berthed, inbound or leaving). */
+  visibleShips(): THREE.Object3D[] {
+    return (this.ships ?? []).map((sh) => sh.group).filter((g) => g.visible);
+  }
+
+  /** A new whale breach or dolphin leap since the last call, if any. */
+  takeSighting(): Sighting | null {
+    const s = this.sea.sighting;
+    if (!s || s.at === this.lastSighting) return null;
+    this.lastSighting = s.at;
+    this.sea.sighting = null;
+    return s;
   }
 
   private placeShip(

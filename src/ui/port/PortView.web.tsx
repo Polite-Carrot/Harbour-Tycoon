@@ -8,7 +8,16 @@ import { PortScene } from './PortScene';
 import type { PortViewProps } from './PortView';
 
 /** How far the camera may wander from the berth, in world units. */
-const BOUNDS = { minX: -260, maxX: 300, minZ: -200, maxZ: 220 };
+const BOUNDS = { minX: -420, maxX: 420, minZ: -380, maxZ: 220 };
+/** How long a sighting prompt stays up, and the quiet spell after each kind. */
+const SIGHTING_MS = 9000;
+const SIGHTING_COOLDOWN_MS = { whale: 25000, dolphins: 90000, shark: 90000 } as const;
+
+const SIGHTING_TEXT = {
+  whale: '🐋 Whale spotted!',
+  dolphins: '🐬 Dolphins leaping!',
+  shark: '🦈 Shark fin!',
+} as const;
 const RECENTER_SECONDS = 0.9;
 const HINT_MS = 6000;
 
@@ -27,12 +36,20 @@ export function PortView(props: PortViewProps) {
   propsRef.current = props;
   const recenterRef = useRef<() => void>(() => {});
   const [failed, setFailed] = useState(false);
+  const [sighting, setSighting] = useState<{ kind: keyof typeof SIGHTING_TEXT; id: number } | null>(null);
+  const lookAtRef = useRef<() => void>(() => {});
   const [hint, setHint] = useState(true);
 
   useEffect(() => {
     const id = setTimeout(() => setHint(false), HINT_MS);
     return () => clearTimeout(id);
   }, []);
+
+  useEffect(() => {
+    if (!sighting) return;
+    const id = setTimeout(() => setSighting(null), SIGHTING_MS);
+    return () => clearTimeout(id);
+  }, [sighting]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -95,20 +112,31 @@ export function PortView(props: PortViewProps) {
     const observer = new ResizeObserver(resize);
     observer.observe(host);
 
-    // Smoothly fly back to the berth.
-    let flight: { from: THREE.Vector3; to: THREE.Vector3; fromT: THREE.Vector3; t: number } | null = null;
-    recenterRef.current = () => {
-      flight = {
-        from: camera.position.clone(),
-        to: homeFor(camera.aspect),
-        fromT: controls.target.clone(),
-        t: 0,
-      };
+    // Smooth camera flights: back to the berth, or out to a sighting.
+    let flight: { from: THREE.Vector3; to: THREE.Vector3; fromT: THREE.Vector3; toT: THREE.Vector3; t: number } | null = null;
+    const flyTo = (target: THREE.Vector3, position: THREE.Vector3) => {
+      flight = { from: camera.position.clone(), to: position, fromT: controls.target.clone(), toT: target, t: 0 };
     };
+    recenterRef.current = () => flyTo(HOME_TARGET.clone(), homeFor(camera.aspect));
+    let lastSeen: THREE.Vector3 | null = null;
+    lookAtRef.current = () => {
+      if (!lastSeen) return;
+      const target = new THREE.Vector3(lastSeen.x, HOME_TARGET.y, lastSeen.z);
+      // Look out to sea from the harbour side, close enough to see the splash.
+      const from = new THREE.Vector3(target.x * 0.6, 0, target.z + 70).sub(target).setY(0).normalize();
+      flyTo(target, target.clone().addScaledVector(from, 60).setY(32));
+    };
+    let sightingId = 0;
+    const lastShown: Record<string, number> = {};
     const stopFlight = () => {
       flight = null;
     };
     controls.addEventListener('start', stopFlight);
+
+    // Test hook for screenshots and debugging, only with ?debug in the URL.
+    if (typeof location !== 'undefined' && location.search.includes('debug')) {
+      (window as unknown as Record<string, unknown>).__harbour = { camera, controls, world };
+    }
 
     let raf = 0;
     let last = performance.now();
@@ -123,7 +151,7 @@ export function PortView(props: PortViewProps) {
         flight.t = Math.min(1, flight.t + dt / RECENTER_SECONDS);
         const e = flight.t < 0.5 ? 4 * flight.t ** 3 : 1 - (-2 * flight.t + 2) ** 3 / 2;
         camera.position.lerpVectors(flight.from, flight.to, e);
-        controls.target.lerpVectors(flight.fromT, HOME_TARGET, e);
+        controls.target.lerpVectors(flight.fromT, flight.toT, e);
         if (flight.t >= 1) flight = null;
       }
       controls.update();
@@ -142,6 +170,13 @@ export function PortView(props: PortViewProps) {
       if (camera.position.y < 4) camera.position.y = 4;
 
       world.update(propsRef.current, Date.now(), dt, camera);
+      const seen = world.takeSighting();
+      const wall = performance.now();
+      if (seen && wall - (lastShown[seen.kind] ?? -1e9) > SIGHTING_COOLDOWN_MS[seen.kind]) {
+        lastShown[seen.kind] = wall;
+        lastSeen = seen.position.clone();
+        setSighting({ kind: seen.kind, id: ++sightingId });
+      }
       renderer.render(world.scene, camera);
 
       // Floating payout, projected from the berth onto the screen.
@@ -203,6 +238,21 @@ export function PortView(props: PortViewProps) {
         }}
       />
 
+      {sighting && (
+        <Pressable
+          key={sighting.id}
+          onPress={() => {
+            lookAtRef.current();
+            setSighting(null);
+          }}
+          accessibilityRole="button"
+          style={({ pressed }) => [styles.sighting, pressed && styles.sightingPressed]}
+        >
+          <Text style={styles.sightingText}>{SIGHTING_TEXT[sighting.kind]}</Text>
+          <Text style={styles.sightingCta}>Look →</Text>
+        </Pressable>
+      )}
+
       {hint && (
         <View style={styles.hint} pointerEvents="none">
           <Text style={styles.hintText}>Drag to explore · scroll or pinch to zoom · right-drag to turn</Text>
@@ -234,6 +284,33 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
   },
   hintText: { color: '#ffffff', fontSize: 12, fontWeight: '700', textAlign: 'center' },
+  sighting: {
+    position: 'absolute',
+    alignSelf: 'center',
+    top: 92,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#0b3d6b',
+    paddingLeft: 14,
+    paddingRight: 6,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 2,
+    borderColor: '#ffd23f',
+  },
+  sightingPressed: { backgroundColor: '#145a96' },
+  sightingText: { color: '#ffffff', fontSize: 13, fontWeight: '800' },
+  sightingCta: {
+    color: '#0b3d6b',
+    backgroundColor: '#ffd23f',
+    fontSize: 12,
+    fontWeight: '900',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
   recenter: {
     position: 'absolute',
     right: 10,

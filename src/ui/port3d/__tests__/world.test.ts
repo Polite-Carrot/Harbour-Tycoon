@@ -27,8 +27,7 @@ const portAt = (berthCycleSeconds: number, level = 0): PortState => ({
 const camera = new THREE.PerspectiveCamera(42, 1, 1, 4000);
 camera.position.set(100, 80, -120);
 
-const shipsIn = (world: HarbourWorld) =>
-  world.scene.children.filter((o) => o.type === 'Group' && o.visible && o.children.length > 20);
+const shipsIn = (world: HarbourWorld) => world.visibleShips();
 
 describe('3D harbour', () => {
   it('builds and steps at every upgrade level and port without throwing', () => {
@@ -69,6 +68,20 @@ describe('3D harbour', () => {
       const cranes = world.scene.children.find((o) => o.type === 'Group' && o.children.length === craneCount(level) && o.children.every((c) => c.children.length > 30));
       expect(cranes).toBeDefined();
     }
+    world.dispose();
+  });
+
+  it('keeps the sea life moving for a long stretch without errors', () => {
+    const world = new HarbourWorld();
+    const port = portAt(2, 10);
+    const stats = derivePortStats(port, 0);
+    // Two minutes of scenery at 30fps covers whale dives, breaches and leaps.
+    for (let i = 0; i < 3600; i++) {
+      world.update({ port, portIndex: 0, stats, lastTickAt: 0 }, i * 33, 1 / 30, camera);
+      world.takeSighting();
+    }
+    const finite = (o: THREE.Object3D) => [o.position.x, o.position.y, o.position.z].every(Number.isFinite);
+    world.scene.traverse((o) => expect(finite(o)).toBe(true));
     world.dispose();
   });
 

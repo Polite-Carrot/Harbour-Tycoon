@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { CONTAINERS } from './palette';
+import { containerMesh } from './containers';
 import { BOX_HEIGHT, BOX_LENGTH, BOX_WIDTH } from './ship';
 import { box, glowSprite, lerp, mat, smoothstep, strut } from './util';
 
@@ -71,15 +72,8 @@ export class Crane {
 
     this.spreader = new THREE.Group();
     this.spreader.add(box(BOX_LENGTH + 0.4, 0.6, BOX_WIDTH + 0.2, mat(0xffc233), 0, 0.3, 0));
-    this.carried = box(
-      BOX_LENGTH,
-      BOX_HEIGHT - 0.1,
-      BOX_WIDTH - 0.15,
-      mat(CONTAINERS[seed % CONTAINERS.length], { roughness: 0.6 }),
-      0,
-      -BOX_HEIGHT / 2 + 0.05,
-      0,
-    );
+    this.carried = containerMesh(CONTAINERS[seed % CONTAINERS.length]);
+    this.carried.position.y = -BOX_HEIGHT / 2 + 0.05;
     this.spreader.add(this.carried);
     this.trolley.add(this.spreader);
   }

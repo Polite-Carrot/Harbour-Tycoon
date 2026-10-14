@@ -19,6 +19,19 @@ On the web the port is a full 3D scene (three.js) you can explore:
   put up light masts, the customs house appears on the quay, and contracts fill
   the container yard.
 
+- **Detailed models.** Containers have corrugated walls, corner castings and
+  door gear. Ships have shaped hulls with a bulbous bow, bridge, lifeboats,
+  railings, lashing bridges, a turning radar, a spinning propeller, funnel
+  smoke and their name on the bow. Tugs and sailboats are built the same way.
+- **Living sea.** Rolling waves (calm inside the breakwater, a real swell
+  outside), sky reflections, sun glitter, whitecaps, foam on the quay, beach
+  and breakwater, and ship wakes drawn into the water. The water is slightly
+  see-through, so you can see what is swimming under it.
+- **Sea life.** A dolphin pod porpoises through the harbour, humpback whales
+  blow, dive tail-up and breach out at sea, sharks patrol with their fins out,
+  and schools of fish mill under the surface (now and then one jumps). A
+  prompt pops up when a whale breaches; tap **Look** to fly the camera there.
+
 The scene is driven entirely by the simulation (`src/ui/port/timeline.ts`):
 ship position, cargo aboard and crane work are recomputed from the save every
 frame, so the picture can never drift from the money.
@@ -26,6 +39,9 @@ frame, so the picture can never drift from the money.
 Native builds (Expo Go) still draw the flat 2D SVG harbour; `PortView.tsx` /
 `PortView.web.tsx` pick the right one per platform. If a browser cannot create
 a WebGL context, the web build falls back to the 2D scene as well.
+
+Add `?debug` to the URL to expose `window.__harbour` (camera, controls, world)
+for poking at the scene from the browser console.
 
 ## Run it
 
@@ -84,7 +100,8 @@ src/ui/                 Presentation
   port/                 Harbour views: PortView picks 3D (web) or 2D SVG (native)
     timeline.ts         Berth cycle -> ship/cargo/payout at any instant
     daylight.ts         Day/night clock and sky colours (pure, tested)
-  port3d/               The three.js harbour: world, sky, water, ship, crane, land
+  port3d/               The three.js harbour: world, sky, water, ship, crane, land,
+                        containers, sealife (dolphins, whales, sharks, fish)
   Hud.tsx               Money and berth status, overlaid on the scene
   SettingsButton.tsx    Gear cog, top right of the scene
   SettingsModal.tsx     Lifetime stats, resume, guarded reset

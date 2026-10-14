@@ -121,3 +121,114 @@ export const smoothstep = (a: number, b: number, x: number) => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
   return t * t * (3 - 2 * t);
 };
+
+/**
+ * Collects many small static parts and merges them per material, so a
+ * detailed model costs a handful of draw calls instead of hundreds.
+ */
+export class Batch {
+  private readonly parts = new Map<THREE.Material, THREE.BufferGeometry[]>();
+  private readonly m = new THREE.Matrix4();
+  private readonly q = new THREE.Quaternion();
+  private readonly e = new THREE.Euler();
+  private readonly s = new THREE.Vector3();
+  private readonly p = new THREE.Vector3();
+
+  /** Add a geometry (consumed) at a position, rotation and scale. */
+  add(
+    geo: THREE.BufferGeometry,
+    material: THREE.Material,
+    x = 0,
+    y = 0,
+    z = 0,
+    rx = 0,
+    ry = 0,
+    rz = 0,
+    sx = 1,
+    sy = 1,
+    sz = 1,
+  ): this {
+    const g = geo.index ? geo.toNonIndexed() : geo;
+    if (g !== geo) geo.dispose();
+    for (const name of Object.keys(g.attributes)) {
+      if (name !== 'position' && name !== 'normal') g.deleteAttribute(name);
+    }
+    this.m.compose(this.p.set(x, y, z), this.q.setFromEuler(this.e.set(rx, ry, rz)), this.s.set(sx, sy, sz));
+    g.applyMatrix4(this.m);
+    const list = this.parts.get(material) ?? [];
+    list.push(g);
+    this.parts.set(material, list);
+    return this;
+  }
+
+  box(w: number, h: number, d: number, material: THREE.Material, x = 0, y = 0, z = 0, ry = 0): this {
+    return this.add(new THREE.BoxGeometry(w, h, d), material, x, y, z, 0, ry);
+  }
+
+  /** A cylinder between two points. */
+  rod(a: THREE.Vector3, b: THREE.Vector3, r: number, material: THREE.Material, sides = 6): this {
+    const dir = new THREE.Vector3().subVectors(b, a);
+    const len = dir.length();
+    const geo = new THREE.CylinderGeometry(r, r, len, sides, 1);
+    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+    const e = new THREE.Euler().setFromQuaternion(q);
+    const mid = a.clone().addScaledVector(dir, len / 2);
+    return this.add(geo, material, mid.x, mid.y, mid.z, e.x, e.y, e.z);
+  }
+
+  build(castShadow = true): THREE.Group {
+    const group = new THREE.Group();
+    for (const [material, geos] of this.parts) {
+      const merged = mergeAll(geos);
+      geos.forEach((g) => g.dispose());
+      const mesh = new THREE.Mesh(merged, material);
+      mesh.castShadow = castShadow;
+      mesh.receiveShadow = true;
+      group.add(mesh);
+    }
+    this.parts.clear();
+    return group;
+  }
+}
+
+/** Concatenate non-indexed position/normal geometries. */
+function mergeAll(geos: THREE.BufferGeometry[]): THREE.BufferGeometry {
+  let count = 0;
+  for (const g of geos) count += g.attributes.position.count;
+  const pos = new Float32Array(count * 3);
+  const nor = new Float32Array(count * 3);
+  let o = 0;
+  for (const g of geos) {
+    pos.set(g.attributes.position.array as Float32Array, o * 3);
+    nor.set(g.attributes.normal.array as Float32Array, o * 3);
+    o += g.attributes.position.count;
+  }
+  const out = new THREE.BufferGeometry();
+  out.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  out.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+  out.computeBoundingSphere();
+  return out;
+}
+
+/**
+ * Text painted to a texture, for ship names. Returns null where there is no
+ * canvas (tests, native), and the caller simply leaves the name off.
+ */
+export function textTexture(text: string, colour = '#ffffff', width = 512, height = 96): THREE.Texture | null {
+  if (typeof document === 'undefined') return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = colour;
+  ctx.font = `900 ${Math.floor(height * 0.72)}px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, width / 2, height / 2 + 2);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  return tex;
+}

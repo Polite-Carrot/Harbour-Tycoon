@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { COLOURS, CONTAINERS, ROOFS, WALLS } from './palette';
 import { GROUND_Y } from './crane';
+import { containerGeometry, containerMaterial, containerMesh } from './containers';
+import { buildSailboat } from './ship';
 import { box, gableRoof, glowSprite, hash, mat, strut } from './util';
 
 /** Floodlight masts, centre-out, so the first few light the berth. */
@@ -190,7 +192,8 @@ export class PortLand {
         const height = 1 + Math.floor(hash(seed + 5) * 4);
         for (let h = 0; h < height; h++) {
           items.push({
-            m: trs(x, GROUND_Y + 1.3 + h * 2.6, z, 1, 1, 1),
+            // Doors face the lanes: alternate ends, the odd box turned round.
+            m: trs(x, GROUND_Y + 1.27 + h * 2.52, z, 1, 1, 1, (col + (hash(seed + h) > 0.85 ? 1 : 0)) % 2 ? Math.PI : 0),
             c: CONTAINERS[Math.floor(hash(seed * 3 + h) * CONTAINERS.length)],
             k: k + h * 0.08,
           });
@@ -198,7 +201,7 @@ export class PortLand {
       }
     }
     items.sort((a, b) => a.k - b.k);
-    const mesh = instanced(new THREE.BoxGeometry(6, 2.5, 2.9), mat(0xffffff, { roughness: 0.6 }), items);
+    const mesh = instanced(containerGeometry(), containerMaterial(), items);
     this.group.add(mesh);
     return { mesh, total: items.length };
   }
@@ -526,10 +529,25 @@ export class PortLand {
     const cabs = [0xff5252, 0x2f8cff, 0xffc233, 0x22c55e, 0xa855f7, 0xff8a1f];
     for (let i = 0; i < 6; i++) {
       const g = new THREE.Group();
-      g.add(box(3.2, 3.2, 2.8, mat(cabs[i], { roughness: 0.5 }), 4.5, 2.1, 0));
-      g.add(box(1.2, 1.2, 2.82, this.windowMat, 5.6, 2.9, 0));
-      g.add(box(8, 0.6, 2.6, mat(0x3b4452), -1.4, 0.9, 0));
-      g.add(box(6, 2.5, 2.6, mat(CONTAINERS[(i * 4) % CONTAINERS.length], { roughness: 0.6 }), -1.4, 2.5, 0));
+      const cab = mat(cabs[i], { roughness: 0.4, metalness: 0.2 });
+      const dark = mat(0x23272e, { roughness: 0.8 });
+      g.add(box(2.6, 2.6, 2.6, cab, 4.6, 2.2, 0));
+      g.add(box(1.3, 1.3, 2.64, this.windowMat, 5.3, 2.75, 0));
+      g.add(box(0.15, 1.1, 2.3, this.windowMat, 5.92, 2.75, 0));
+      g.add(box(0.2, 0.5, 2.7, mat(0xc9d2dc, { metalness: 0.6, roughness: 0.3 }), 5.95, 1.3, 0)); // bumper
+      g.add(box(0.25, 3.2, 0.25, mat(0xc9d2dc, { metalness: 0.6, roughness: 0.3 }), 3.2, 2.9, 1.1)); // exhaust
+      g.add(box(9, 0.45, 2.3, mat(0x3b4452), -1.2, 1.05, 0)); // chassis
+      for (const wx of [4.8, 2.4, -3.2, -4.6]) {
+        for (const wz of [-1.15, 1.15]) {
+          const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.45, 12), dark);
+          wheel.rotation.x = Math.PI / 2;
+          wheel.position.set(wx, 0.55, wz);
+          g.add(wheel);
+        }
+      }
+      const load = containerMesh(CONTAINERS[(i * 4) % CONTAINERS.length]);
+      load.position.set(-1.5, 2.55, 0);
+      g.add(load);
       this.trucks.push(g);
       this.group.add(g);
     }
@@ -553,27 +571,13 @@ export class PortLand {
 
   private buildBoats() {
     const sails = [0xff5252, 0xffc233, 0x2f8cff, 0xffffff];
+    const hulls = [0xffffff, 0x1d3557, 0xffffff, 0xe63946];
     for (let i = 0; i < 4; i++) {
-      const g = new THREE.Group();
-      const hull = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 0.8, 8, 8, 1), mat(0xffffff, { roughness: 0.4 }));
-      hull.rotation.z = Math.PI / 2;
-      hull.scale.set(1, 1, 0.6);
-      hull.position.y = 0.3;
-      g.add(hull);
-      g.add(strut(new THREE.Vector3(0.5, 0.5, 0), new THREE.Vector3(0.5, 11, 0), 0.12, mat(0xdddddd)));
-      const shape = new THREE.Shape();
-      shape.moveTo(0, 0);
-      shape.lineTo(0, 9.5);
-      shape.lineTo(-5, 0);
-      shape.closePath();
-      const sail = new THREE.Mesh(new THREE.ShapeGeometry(shape), mat(sails[i], { side: THREE.DoubleSide }));
-      sail.position.set(0.4, 1.2, 0);
-      sail.castShadow = true;
-      g.add(sail);
+      const g = buildSailboat(sails[i], hulls[i]);
       this.boats.push({
         g,
-        cx: -40 + i * 80,
-        cz: -190 - i * 30,
+        cx: -60 + i * 90,
+        cz: -230 - i * 35,
         rx: 120 + i * 20,
         rz: 40 + i * 10,
         speed: 0.018 + i * 0.004,
