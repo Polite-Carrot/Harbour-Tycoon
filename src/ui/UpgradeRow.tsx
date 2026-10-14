@@ -70,7 +70,7 @@ const styles = StyleSheet.create({
   blurb: { color: theme.textDim, fontSize: 12 },
   gain: { color: theme.good, fontSize: 12, fontWeight: '600' },
   cost: { fontSize: 15, fontWeight: '700' },
-  costOk: { color: theme.money },
+  costOk: { color: theme.moneyText },
   costNo: { color: theme.disabled },
   maxed: { color: theme.textDim, fontSize: 13, fontWeight: '700', letterSpacing: 1 },
 });

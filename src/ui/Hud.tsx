@@ -1,7 +1,10 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { formatMoney, formatRate, formatSeconds } from '../sim/format';
 import type { DerivedStats, PortState } from '../sim/types';
+import { clockLabel, periodOf, timeOfDay } from './port/daylight';
 import { theme } from './theme';
+
+const PERIOD_ICON = { day: '☀', dawn: '☀', dusk: '☾', night: '☾' } as const;
 
 interface Props {
   money: number;
@@ -25,11 +28,28 @@ export function Hud({ money, totalIncome, portLabel, portIndex, portCount, port,
     ? stats.arrivalSeconds + stats.unloadSeconds - pos
     : stats.arrivalSeconds - pos;
 
+  // The HUD re-renders with every sim tick, which is plenty for a clock.
+  const tod = timeOfDay(Date.now());
+  const period = periodOf(tod);
+
   return (
     <View style={styles.layer} pointerEvents="none">
+      <View style={styles.topRow}>
+        <View style={[styles.clock, period === 'night' || period === 'dusk' ? styles.clockNight : null]}>
+          <Text style={[styles.clockIcon, period === 'night' || period === 'dusk' ? styles.clockIconNight : null]}>
+            {PERIOD_ICON[period]}
+          </Text>
+          <Text style={[styles.clockText, period === 'night' || period === 'dusk' ? styles.clockTextNight : null]}>
+            {clockLabel(tod)}
+          </Text>
+        </View>
+      </View>
+
       <View style={styles.top}>
-        <Text style={styles.money}>{formatMoney(money)}</Text>
-        <Text style={styles.rate}>{formatRate(totalIncome)}</Text>
+        <View style={styles.moneyPill}>
+          <Text style={styles.money}>{formatMoney(money)}</Text>
+          <Text style={styles.rate}>{formatRate(totalIncome)}</Text>
+        </View>
       </View>
 
       <View style={styles.bottom}>
@@ -65,28 +85,53 @@ const styles = StyleSheet.create({
     bottom: 0,
     justifyContent: 'space-between',
   },
+  topRow: { position: 'absolute', top: 10, left: 10 },
+  clock: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: theme.scrim,
+    borderColor: theme.scrimEdge,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  clockNight: { backgroundColor: 'rgba(20,32,92,0.88)', borderColor: 'rgba(180,200,255,0.35)' },
+  clockIcon: { color: '#ff9f1c', fontSize: 15, fontWeight: '900' },
+  clockIconNight: { color: '#ffe8a3' },
+  clockText: { color: theme.text, fontSize: 13, fontWeight: '800', letterSpacing: 0.5 },
+  clockTextNight: { color: '#e6ecff' },
   top: {
     alignItems: 'center',
-    paddingTop: 10,
-    paddingBottom: 6,
-    // Money sits over the cranes, so it needs its own ground to read against.
+    paddingTop: 8,
+  },
+  moneyPill: {
+    alignItems: 'center',
     backgroundColor: theme.scrim,
+    borderColor: theme.scrimEdge,
+    borderWidth: 1,
+    borderRadius: 18,
+    paddingHorizontal: 20,
+    paddingTop: 2,
+    paddingBottom: 6,
+    shadowColor: '#0b3d6b',
+    shadowOpacity: 0.18,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
   },
   money: {
-    color: theme.money,
-    fontSize: 38,
-    fontWeight: '800',
-    textShadowColor: 'rgba(0,0,0,0.55)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
+    color: '#ffb000',
+    fontSize: 34,
+    fontWeight: '900',
+    textShadowColor: '#0b3d6b',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 0.5,
   },
   rate: {
     color: theme.good,
-    fontSize: 15,
-    fontWeight: '700',
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
+    fontSize: 14,
+    fontWeight: '800',
   },
   bottom: {
     flexDirection: 'row',
@@ -98,11 +143,11 @@ const styles = StyleSheet.create({
     backgroundColor: theme.scrim,
     borderColor: theme.scrimEdge,
     borderWidth: 1,
-    borderRadius: 7,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     alignItems: 'center',
   },
-  chipStrong: { color: theme.text, fontSize: 11, fontWeight: '800', letterSpacing: 0.4 },
-  chipDim: { color: theme.textDim, fontSize: 10, marginTop: 1 },
+  chipStrong: { color: theme.text, fontSize: 11, fontWeight: '900', letterSpacing: 0.4 },
+  chipDim: { color: theme.textDim, fontSize: 10, marginTop: 1, fontWeight: '600' },
 });

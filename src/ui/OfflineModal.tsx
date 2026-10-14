@@ -42,7 +42,7 @@ export function OfflineModal({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.65)',
+    backgroundColor: 'rgba(11,61,107,0.45)',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
@@ -60,7 +60,7 @@ const styles = StyleSheet.create({
   },
   title: { color: theme.text, fontSize: 18, fontWeight: '700' },
   away: { color: theme.textDim, fontSize: 13 },
-  earned: { color: theme.money, fontSize: 32, fontWeight: '800', marginVertical: 6 },
+  earned: { color: theme.moneyText, fontSize: 32, fontWeight: '800', marginVertical: 6 },
   capped: { color: theme.textDim, fontSize: 12, textAlign: 'center' },
   button: {
     marginTop: 12,
@@ -69,5 +69,5 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 36,
   },
-  buttonText: { color: theme.bg, fontSize: 15, fontWeight: '800' },
+  buttonText: { color: theme.onAccent, fontSize: 15, fontWeight: '800' },
 });

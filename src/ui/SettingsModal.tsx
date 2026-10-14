@@ -135,7 +135,7 @@ const Divider = () => <View style={styles.divider} />;
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: 'rgba(11,61,107,0.45)',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 22,
@@ -157,7 +157,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
   rowLabel: { color: theme.textDim, fontSize: 13, flexShrink: 1 },
   rowValue: { color: theme.text, fontSize: 13, fontWeight: '700' },
-  rowValueStrong: { color: theme.money, fontSize: 15, fontWeight: '800' },
+  rowValueStrong: { color: theme.moneyText, fontSize: 15, fontWeight: '800' },
   divider: { height: 1, backgroundColor: theme.border, marginVertical: 3 },
 
   primary: {
@@ -168,7 +168,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   primaryPressed: { opacity: 0.85 },
-  primaryText: { color: theme.bg, fontSize: 15, fontWeight: '800' },
+  primaryText: { color: theme.onAccent, fontSize: 15, fontWeight: '800' },
 
   secondary: { paddingVertical: 10, alignItems: 'center' },
   secondaryText: { color: theme.textDim, fontSize: 14, fontWeight: '700' },

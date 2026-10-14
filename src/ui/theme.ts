@@ -1,16 +1,22 @@
-/** Placeholder visual tokens. Ugly-but-consistent; replaced at polish time. */
+/** Bright, sunny harbour colours. The 3D scene has its own palette in
+ *  port3d/palette.ts; these are for the UI that docks around it. */
 export const theme = {
-  bg: '#0d1b2a',
-  panel: '#1b263b',
-  panelAlt: '#22314a',
-  border: '#2f4260',
-  text: '#e0e6ed',
-  textDim: '#8fa3bf',
-  accent: '#4cc9f0',
-  money: '#ffd166',
-  good: '#06d6a0',
-  disabled: '#41506b',
-  /** Translucent ink for overlays sitting on top of the scene. */
-  scrim: 'rgba(6,14,26,0.62)',
-  scrimEdge: 'rgba(140,175,210,0.22)',
+  bg: '#e3f4ff',
+  panel: '#ffffff',
+  panelAlt: '#fff5d6',
+  border: '#b3daf5',
+  text: '#0b3d6b',
+  textDim: '#4b6f8f',
+  accent: '#ff7a1a',
+  /** Fills: price pills, highlights. */
+  money: '#ffc21a',
+  /** Money as text on a light ground. */
+  moneyText: '#e07800',
+  good: '#11a053',
+  disabled: '#9db4c8',
+  /** Text on an accent-coloured button. */
+  onAccent: '#ffffff',
+  /** Overlays sitting on top of the scene. */
+  scrim: 'rgba(255,255,255,0.9)',
+  scrimEdge: 'rgba(11,61,107,0.18)',
 } as const;

@@ -2,8 +2,30 @@
 
 Idle/incremental port management game. Expo + React Native + TypeScript.
 
-This is the **vertical slice**: one berth, one cargo type, three upgrades,
-save/load, and offline earnings on resume. The UI is deliberately plain.
+Run a busy container port: ships sail in, gantry cranes unload them, and every
+upgrade you buy shows up in the harbour.
+
+## The 3D harbour
+
+On the web the port is a full 3D scene (three.js) you can explore:
+
+- **Drag** to pan around the port, **scroll / pinch** to zoom, **right-drag /
+  two-finger twist** to orbit. The ⌖ button flies back to the berth.
+- **Day and night.** One harbour day lasts 8 real minutes. The sun crosses the
+  sky, then dusk, lit windows, street lamps, floodlights, a sweeping lighthouse
+  and a moonlit sea. The clock top-left shows the harbour time.
+- **Upgrades are visible.** Cranes add gantries on the quay rails, ship size
+  grows the hull and its stacks, tugboats escort and hold the ship, floodlights
+  put up light masts, the customs house appears on the quay, and contracts fill
+  the container yard.
+
+The scene is driven entirely by the simulation (`src/ui/port/timeline.ts`):
+ship position, cargo aboard and crane work are recomputed from the save every
+frame, so the picture can never drift from the money.
+
+Native builds (Expo Go) still draw the flat 2D SVG harbour; `PortView.tsx` /
+`PortView.web.tsx` pick the right one per platform. If a browser cannot create
+a WebGL context, the web build falls back to the 2D scene as well.
 
 ## Run it
 
@@ -59,7 +81,10 @@ src/sim/                Pure simulation. No React, no storage, no clock.
   stats.ts              the summary the settings panel reports
 src/state/              Persistence and the React lifecycle wiring
 src/ui/                 Presentation
-  port/                 The animated harbour scene (SVG)
+  port/                 Harbour views: PortView picks 3D (web) or 2D SVG (native)
+    timeline.ts         Berth cycle -> ship/cargo/payout at any instant
+    daylight.ts         Day/night clock and sky colours (pure, tested)
+  port3d/               The three.js harbour: world, sky, water, ship, crane, land
   Hud.tsx               Money and berth status, overlaid on the scene
   SettingsButton.tsx    Gear cog, top right of the scene
   SettingsModal.tsx     Lifetime stats, resume, guarded reset

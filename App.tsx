@@ -12,7 +12,7 @@ import { OfflineModal } from './src/ui/OfflineModal';
 import { SettingsButton } from './src/ui/SettingsButton';
 import { SettingsModal } from './src/ui/SettingsModal';
 import { PortSwitcher } from './src/ui/PortSwitcher';
-import { PortScene } from './src/ui/port/PortScene';
+import { PortView } from './src/ui/port/PortView';
 import { theme } from './src/ui/theme';
 
 export default function App() {
@@ -46,7 +46,7 @@ export default function App() {
     return (
       <SafeAreaView style={[styles.screen, styles.centre]}>
         <Text style={styles.dim}>Opening the harbour…</Text>
-        <StatusBar style="light" />
+        <StatusBar style="dark" />
       </SafeAreaView>
     );
   }
@@ -55,7 +55,7 @@ export default function App() {
     <SafeAreaView style={styles.screen}>
       {/* The harbour is the screen. Everything else docks around it. */}
       <View style={styles.scene}>
-        <PortScene
+        <PortView
           port={view.port}
           portIndex={view.index}
           stats={view.stats}
@@ -97,7 +97,7 @@ export default function App() {
       />
 
       <OfflineModal report={offlineReport} onDismiss={dismissOfflineReport} />
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
     </SafeAreaView>
   );
 }
