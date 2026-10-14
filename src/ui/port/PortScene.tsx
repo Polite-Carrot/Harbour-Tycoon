@@ -10,7 +10,6 @@ import { Ship } from './Ship';
 import {
   SCENE,
   berthXFor,
-  clamp01,
   containerRows,
   craneCount,
   easeInCubic,
@@ -18,20 +17,8 @@ import {
   lerp,
   shipScale,
 } from './geometry';
+import { berthMoment } from './timeline';
 import { useSceneClock } from './useSceneClock';
-
-/** How long the payout floats up for after a ship finishes. */
-const PAYOUT_SECONDS = 1.4;
-
-/** Fraction of the arrival phase the outgoing ship takes to clear the berth. */
-const DEPART_SHARE = 0.45;
-
-/**
- * How long the next ship holds off before entering, as a fraction of the
- * arrival phase. Without this the outgoing and incoming hulls slide through
- * each other mid-frame, which reads as one glitching ship rather than two.
- */
-const ARRIVE_DELAY = 0.3;
 
 interface Props {
   port: PortState;
@@ -43,25 +30,15 @@ interface Props {
 }
 
 /**
- * The port, drawn from the simulation rather than animated alongside it.
- *
- * Position within the berth cycle is recomputed from the save's own clock
- * (`berthCycleSeconds` as of `lastTickAt`, plus wall time since), so the scene
- * is smooth at frame rate while the sim keeps ticking at 10Hz — and the two
- * can never drift, because the scene holds no animation state of its own.
+ * The flat SVG harbour. Used on native; the web build draws the 3D port
+ * (PortView.web.tsx). Timing comes from `berthMoment`, shared by both.
  */
 export function PortScene({ port, portIndex, stats, lastTickAt }: Props) {
   const now = useSceneClock();
   const t = now / 1000;
 
-  const { arrivalSeconds: arrival, unloadSeconds: unload, cycleSeconds: cycle } = stats;
-
-  const elapsed = Math.max(0, (now - lastTickAt) / 1000);
-  const pos = (((port.berthCycleSeconds + elapsed) % cycle) + cycle) % cycle;
-
-  const arriving = pos < arrival;
-  const arrivalP = arriving ? pos / arrival : 1;
-  const unloadP = arriving ? 0 : clamp01((pos - arrival) / unload);
+  const m = berthMoment(port, stats, lastTickAt, now);
+  const { arriving, showDeparting, showPayout, payoutP, cargo } = m;
 
   const scale = shipScale(port.upgrades.shipSize);
   const rows = containerRows(port.upgrades.shipSize);
@@ -69,20 +46,13 @@ export function PortScene({ port, portIndex, stats, lastTickAt }: Props) {
   const berthX = berthXFor(scale);
 
   // Incoming ship: holds off, sails in, then sits and unloads.
-  const arriveP = clamp01((arrivalP - ARRIVE_DELAY) / (1 - ARRIVE_DELAY));
-  const shipX = arriving ? lerp(-175, berthX, easeOutCubic(arriveP)) : berthX;
-  const cargo = arriving ? 1 : 1 - unloadP;
+  const shipX = arriving ? lerp(-175, berthX, easeOutCubic(m.arriveP)) : berthX;
 
   // Outgoing ship: the one just emptied, clearing the berth as the next arrives.
-  const departP = clamp01(arrivalP / DEPART_SHARE);
-  const showDeparting = arriving && departP < 1;
-  const departX = lerp(berthX, 400, easeInCubic(departP));
+  const departX = lerp(berthX, 400, easeInCubic(m.departP));
 
   const cranes = craneCount(port.upgrades.cranes);
   const craneSpeed = 0.5 + port.upgrades.cranes * 0.035;
-
-  const showPayout = arriving && pos < PAYOUT_SECONDS;
-  const payoutP = showPayout ? pos / PAYOUT_SECONDS : 0;
 
   return (
     <View style={styles.frame}>
@@ -144,7 +114,7 @@ export function PortScene({ port, portIndex, stats, lastTickAt }: Props) {
           port={portIndex}
         />
 
-        <Quay fill={unloadP} />
+        <Quay fill={m.unloadP} />
 
         {showPayout && (
           <G opacity={1 - payoutP}>
