@@ -76,8 +76,10 @@ export function wavePath(
  * visual has to saturate long before the number does or the hull would grow
  * off the edge of the scene.
  */
-export function shipScale(level: number): number {
-  return 1 + Math.min(0.3, level * 0.022);
+export function shipScale(level: number, dredging = 0): number {
+  // Dredging deepens the berth for a bigger class of ship, up to 1.45x —
+  // still under the crane booms with a full five-high deck stack.
+  return 1 + Math.min(0.3, level * 0.022) + Math.min(0.15, dredging * 0.01);
 }
 
 /** Deck stacks get taller as ships get bigger. Capped for boom clearance. */

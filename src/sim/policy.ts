@@ -3,7 +3,7 @@ import {
   incomeAfterBuying,
   incomeAfterNewPort,
   isMaxed,
-  portCost,
+  portPrice,
   totalIncome,
   upgradeCost,
 } from './economy';
@@ -44,7 +44,7 @@ export function bestBuy(state: GameState, cfg: BalanceConfig = BALANCE): Move | 
   }
 
   if (state.ports.length < cfg.ports.maxPorts) {
-    const cost = portCost(state.ports.length, cfg);
+    const cost = portPrice(state, cfg);
     if (Number.isFinite(cost) && cost > 0 && state.money >= cost) {
       const roi = (incomeAfterNewPort(state, cfg) - current) / cost;
       if (roi > bestRoi) {

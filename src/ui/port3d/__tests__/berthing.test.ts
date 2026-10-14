@@ -8,7 +8,7 @@ import { HULL_LENGTH } from '../ship';
  * them off, and nothing ever jumps or appears out of nowhere.
  */
 
-const scales = [1, 1.15, 1.3];
+const scales = [1, 1.15, 1.3, 1.45];
 const STEP = 0.02;
 
 describe('ships', () => {

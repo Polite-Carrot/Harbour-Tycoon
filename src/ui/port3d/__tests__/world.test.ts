@@ -18,6 +18,9 @@ const upgrades = (n: number) => ({
   tugboats: Math.min(7, n),
   floodlights: Math.min(25, n),
   customs: n,
+  railLink: Math.min(20, n),
+  dredging: Math.min(15, n),
+  cruise: Math.min(12, n),
 });
 
 const portAt = (berthCycleSeconds: number, level = 0): PortState => ({

@@ -46,6 +46,47 @@ faster than any real berthing could, so the 3D berth runs its own steady
 routine (`src/ui/port3d/berthing.ts`) while the money, the HUD and the "+$"
 pops still follow the simulation exactly.
 
+## Coming back for more
+
+A run takes a couple of hours to build a port empire; the game is built to be
+played over weeks.
+
+**Late upgrades.** Three dear, capped tracks open from about the second hour:
+**Rail Link** (container trains run inland along the coast), **Dredging** (a
+grab dredger works the channel, and ships grow a size class) and **Cruise
+Terminal** (a terminal hall and a liner alongside). Each one appears in the
+3D harbour when bought.
+
+**Head Office (prestige).** Once a run has earned $1B, the company can be sold
+for Reputation stars. Stars are permanent: each adds +10% income on every port,
+for good. Star milestones unlock perks:
+
+| Stars | Perk |
+| ---: | --- |
+| 10 | Seed Capital: runs start with $10K |
+| 25 | Night Shift: offline earnings build for 8h |
+| 50 | Experienced Crews: new ports start at level 5, with a tug |
+| 100 | Investor Network: ports cost 90% less |
+| 200 | Harbour Master: offline earnings build for 12h |
+| 400 | Trade Empire: daily rewards pay double |
+| 800 | Golden Fleet: all income doubled |
+| 1500 | Shipping Dynasty: doubled again |
+
+Stars are linear in the exponent of what a run earned (1.5 per 10x). Steeper
+curves snowballed in simulation: runs collapsed from hours to two minutes and
+every perk unlocked on day one. With the linear curve a sensible player
+earns ~40-50 stars a run and runs settle at 70-90 minutes, so the ladder
+takes many sessions: ~20 runs to Golden Fleet, ~35 to Shipping Dynasty.
+
+**Daily.** A seven-day login streak (minutes of income, stars on day seven;
+miss a day and it restarts), three daily contracts sized to the port (handle
+N ships, buy N levels, earn $N; the earnings contract also grants 15 minutes
+of double income), and a **VIP tall ship** that sails through the bay for two
+minutes in every quarter hour; tap the banner while she's in for a bonus.
+Rewards are paid as minutes of current income, so they matter at every stage.
+Contracts, VIP visits and streak days are all deterministic and seeded from
+the date (local midnight), so they need no server.
+
 Native builds (Expo Go) still draw the flat 2D SVG harbour; `PortView.tsx` /
 `PortView.web.tsx` pick the right one per platform. If a browser cannot create
 a WebGL context, the web build falls back to the 2D scene as well.
@@ -100,7 +141,10 @@ native relies on.
 ```
 src/config/balance.ts   EVERY tunable number. Nothing else hard-codes balance.
 src/sim/                Pure simulation. No React, no storage, no clock.
-  engine.ts             advance / catchUp / buyUpgrade / buyPort / sanitise
+  engine.ts             advance / catchUp / buyUpgrade / buyPort / sellCompany
+                        / claim rewards / sanitise
+  prestige.ts           Reputation stars, perks, the income multiplier
+  daily.ts              login streak, daily contracts, VIP visits (seeded)
   economy.ts            cost curves, port tiers, bulk-buy maths
   policy.ts             "active player" model, shared by report + tests
   format.ts             big-number, currency and duration display
@@ -170,9 +214,9 @@ burst. Measured spacing between port unlocks: **16x -> ~8 min apart, 1000x ->
 ten minutes.
 
 The conclusion is that money cannot gate expansion in an economy that compounds
-this fast. Properly spacing ports needs a gate money cannot buy — a
-requirement on the previous port's development, or prestige. Neither exists in
-the slice yet, so ports currently all open inside the first ~2.5 hours.
+this fast. Within a run, ports still all open inside the first ~2.5 hours;
+the long arc now comes from Head Office, where each run restarts from one port
+and the perks change how fast the next run expands.
 
 ## Buying things
 
@@ -403,9 +447,11 @@ asserting its income matches `totalIncome()` exactly.
 
 ## Save / load
 
-- `AsyncStorage`, single JSON blob, versioned. **v1 saves migrate**: the old
-  flat single-port shape is lifted into `ports[0]`, keeping levels, money and
-  lifetime earnings. Anyone who played the deployed build keeps their harbour.
+- `AsyncStorage`, single JSON blob, versioned. **Old saves migrate**: v1's
+  flat single-port shape is lifted into `ports[0]`; v2 saves (before
+  prestige) start with no stars, and their whole history counts as the
+  current run, so selling straight away pays for what was already earned.
+  New upgrade tracks default to level 0.
 - Written on background/inactive (`AppState`), on unmount, on every purchase,
   and on a 15s autosave.
 - Everything loaded from disk goes through `sanitise()` before it reaches the
@@ -417,14 +463,11 @@ asserting its income matches `totalIncome()` exactly.
 
 ## Deliberately not built yet
 
-Ads, IAP, prestige, art, sound, analytics, achievements — all out of scope for
-the slice. Buying ports is **expansion, not prestige**: nothing resets, and no
-permanent multiplier is earned.
+Ads, IAP, sound, analytics, achievements — all out of scope for now.
 
-Two hooks are already in place for prestige when it lands: `lifetimeEarnings`
-is tracked separately from spendable `money` and is never decremented by
-purchases, and `deriveStats()` is the single choke point where a permanent
-multiplier would be applied.
+Prestige is in (`src/sim/prestige.ts`, `sellCompany` in the engine): the
+Reputation multiplier is applied in `derivePortStats` via `totalIncome` /
+`deriveStats`, so every income figure in the game includes it.
 
 ## Known limitations of the slice
 

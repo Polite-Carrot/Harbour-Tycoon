@@ -4,6 +4,7 @@ import { skyAt, timeOfDay, type Sky } from '../port/daylight';
 import { containerRows, craneCount, shipScale } from '../port/geometry';
 import { berthMoment } from '../port/timeline';
 import { Crane } from './crane';
+import { CruiseTerminal, Dredger, RailLink, TallShip } from './expansions';
 import { liveryFor } from './palette';
 import { PortLand } from './port';
 import { berthZ as berthZOf, shipsAt, tugsAt } from './berthing';
@@ -62,6 +63,10 @@ export class HarbourWorld {
   private craneKey = '';
   private readonly tugs: THREE.Group[] = [];
   private readonly sea = new SeaLife();
+  private readonly rail = new RailLink();
+  private readonly dredger = new Dredger();
+  private readonly terminal: CruiseTerminal;
+  private readonly tallShip = new TallShip();
   private lastSighting = -99;
   private readonly tmp = new THREE.Vector3();
   private readonly tmp2 = new THREE.Vector3();
@@ -74,6 +79,9 @@ export class HarbourWorld {
     const s = this.scene;
     s.fog = this.fog;
     s.add(this.skyLayer.group, this.water.group, this.land.group, this.craneGroup, this.sea.group);
+    this.terminal = new CruiseTerminal(this.land.windowMat);
+    s.add(this.rail.group, this.dredger.group, this.terminal.group, this.tallShip.group);
+    this.dredger.onSplash = (x, y, z, power) => this.sea.splash(x, y, z, power);
 
     s.add(this.hemi);
     this.keyLight.castShadow = true;
@@ -135,7 +143,7 @@ export class HarbourWorld {
     this.land.update(t, sky.lamps, up, heightAt, tod);
 
     // --- ships -----------------------------------------------------------------
-    const scale = shipScale(up.shipSize);
+    const scale = shipScale(up.shipSize, up.dredging);
     const tiers = containerRows(up.shipSize);
     const livery = liveryFor(portIndex);
     const shipKey = `${portIndex}:${tiers}`;
@@ -177,6 +185,12 @@ export class HarbourWorld {
 
     // --- sea life ----------------------------------------------------------------
     this.sea.update(t, Math.min(dt, 0.1), heightAt);
+
+    // --- the late upgrades, and the VIP visitor ------------------------------------
+    this.rail.update(t, up.railLink, sky.lamps);
+    this.dredger.update(t, up.dredging, heightAt);
+    this.terminal.update(t, up.cruise, sky.lamps, heightAt);
+    this.tallShip.update(t, now, heightAt);
 
     // --- tugs ------------------------------------------------------------------
     // One tug from the first level, a pair from level 4. They meet each ship,

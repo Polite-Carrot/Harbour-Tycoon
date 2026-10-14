@@ -15,13 +15,15 @@ interface Props {
   portCount: number;
   port: PortState;
   stats: DerivedStats;
+  /** Epoch millis a double-income boost runs until. */
+  boostUntil?: number;
 }
 
 /**
  * Overlay on top of the scene: money, income, and what the berth is doing.
  * Sits over the art rather than beside it so the harbour stays the whole view.
  */
-export function Hud({ money, totalIncome, portLabel, portIndex, portCount, stats }: Props) {
+export function Hud({ money, totalIncome, portLabel, portIndex, portCount, stats, boostUntil = 0 }: Props) {
 
   // The HUD re-renders with every sim tick, which is plenty for a clock.
   const tod = timeOfDay(Date.now());
@@ -45,6 +47,11 @@ export function Hud({ money, totalIncome, portLabel, portIndex, portCount, stats
           <Text style={styles.money}>{formatMoney(money)}</Text>
           <Text style={styles.rate}>{formatRate(totalIncome)}</Text>
         </View>
+        {boostUntil > Date.now() && (
+          <View style={styles.boost}>
+            <Text style={styles.boostText}>⚡ 2× income · {formatSeconds((boostUntil - Date.now()) / 1000)}</Text>
+          </View>
+        )}
       </View>
 
       <View style={styles.bottom}>
@@ -127,6 +134,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '800',
   },
+  boost: {
+    marginTop: 5,
+    backgroundColor: theme.accent,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
+  boostText: { color: theme.onAccent, fontSize: 12, fontWeight: '900' },
   bottom: {
     flexDirection: 'row',
     justifyContent: 'space-between',

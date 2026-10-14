@@ -1,19 +1,41 @@
 import { BALANCE, UPGRADE_ORDER, type BalanceConfig, type UpgradeId } from '../config/balance';
 import {
+  activeVip,
+  canClaimLogin,
+  contractReward,
+  emptyDaily,
+  loginReward,
+  recordProgress,
+  vipReward,
+  type Reward,
+} from './daily';
+import {
   bulkCost,
   derivePortStats,
   emptyPort,
   isMaxed,
-  portCost,
+  portPrice,
   resolveCount,
+  totalIncome,
 } from './economy';
+import {
+  dailyRewardMultiplier,
+  incomeMultiplier,
+  offlineCapSeconds,
+  starsFor,
+  startingLevels,
+  startingMoney,
+} from './prestige';
 import {
   SAVE_VERSION,
   type AdvanceResult,
   type BuyQuantity,
+  type Contract,
+  type DailyState,
   type GameState,
   type OfflineReport,
   type PortState,
+  type PrestigeState,
 } from './types';
 
 /**
@@ -40,6 +62,11 @@ export function createNewGame(
     ports: [emptyPort()],
     activePort: 0,
     lastTickAt: now,
+    runEarnings: 0,
+    prestige: { stars: 0, resets: 0, bestRun: 0 },
+    daily: emptyDaily(),
+    boostUntil: 0,
+    totals: { ships: 0, upgrades: 0 },
   };
 }
 
@@ -67,8 +94,9 @@ function advancePort(
   index: number,
   dt: number,
   cfg: BalanceConfig,
+  multiplier: number,
 ): { port: PortState; earned: number; ships: number } {
-  const stats = derivePortStats(port, index, cfg);
+  const stats = derivePortStats(port, index, cfg, multiplier);
   const { arrivalSeconds: arrival, unloadSeconds: unload, cycleSeconds: cycle } = stats;
 
   if (cycle <= 0) return { port, earned: 0, ships: 0 };
@@ -107,22 +135,35 @@ export function advance(
     return { state, earned: 0, shipsProcessed: 0, secondsSimulated: 0 };
   }
 
+  const multiplier = incomeMultiplier(state, cfg);
   let earned = 0;
   let shipsProcessed = 0;
   const ports = state.ports.map((port, i) => {
-    const r = advancePort(port, i, dt, cfg);
+    const r = advancePort(port, i, dt, cfg, multiplier);
     earned += r.earned * efficiency;
     shipsProcessed += r.ships;
     return r.port;
   });
+
+  // A boost doubles income for the part of this step it overlaps. Income is
+  // spread evenly enough over time that scaling by the overlap is exact to
+  // within a single ship.
+  const boosted = Math.min(dt, Math.max(0, (state.boostUntil - state.lastTickAt) / 1000));
+  if (boosted > 0) earned *= (dt + boosted * (cfg.daily.boostMultiplier - 1)) / dt;
+
+  let daily = recordProgress(state.daily, 'ships', shipsProcessed);
+  daily = recordProgress(daily, 'earn', earned);
 
   return {
     state: {
       ...state,
       money: state.money + earned,
       lifetimeEarnings: state.lifetimeEarnings + earned,
+      runEarnings: state.runEarnings + earned,
       ports,
       lastTickAt: state.lastTickAt + dt * 1000,
+      daily,
+      totals: { ...state.totals, ships: state.totals.ships + shipsProcessed },
     },
     earned,
     shipsProcessed,
@@ -152,7 +193,8 @@ export function catchUp(
     return { result: { ...result, state: { ...result.state, lastTickAt: now } }, report: null };
   }
 
-  const creditedSeconds = Math.min(awaySeconds, cfg.offline.capSeconds);
+  const cap = offlineCapSeconds(state, cfg);
+  const creditedSeconds = Math.min(awaySeconds, cap);
   const result = advance(state, creditedSeconds, cfg, cfg.offline.efficiency);
 
   // The player does not keep the uncredited time — the clock resets to now.
@@ -167,7 +209,7 @@ export function catchUp(
       earned: result.earned,
       awaySeconds,
       creditedSeconds,
-      wasCapped: awaySeconds > cfg.offline.capSeconds,
+      wasCapped: awaySeconds > cap,
     },
   };
 }
@@ -204,6 +246,8 @@ export function buyUpgrade(
       ports: state.ports.map((p, j) =>
         j === i ? { ...p, upgrades: { ...p.upgrades, [id]: level + count } } : p,
       ),
+      daily: recordProgress(state.daily, 'upgrades', count),
+      totals: { ...state.totals, upgrades: state.totals.upgrades + count },
     },
     bought: count,
   };
@@ -219,19 +263,105 @@ export function buyPort(
 ): { state: GameState; bought: boolean } {
   if (state.ports.length >= cfg.ports.maxPorts) return { state, bought: false };
 
-  const cost = portCost(state.ports.length, cfg);
+  const cost = portPrice(state, cfg);
   if (!Number.isFinite(cost) || state.money < cost) return { state, bought: false };
 
   return {
     state: {
       ...state,
       money: state.money - cost,
-      ports: [...state.ports, emptyPort()],
+      ports: [...state.ports, emptyPort(startingLevels(state))],
       // Jump the player to what they just bought.
       activePort: state.ports.length,
     },
     bought: true,
   };
+}
+
+/**
+ * Sell the company: bank the Reputation this run has earned and start again
+ * with one empty port. Stars, perks, daily progress and lifetime totals carry
+ * over; money, ports and upgrades do not.
+ */
+export function sellCompany(
+  state: GameState,
+  now: number,
+  cfg: BalanceConfig = BALANCE,
+): { state: GameState; stars: number } {
+  const stars = starsFor(state.runEarnings, cfg);
+  if (stars <= 0) return { state, stars: 0 };
+
+  const prestige: PrestigeState = {
+    stars: state.prestige.stars + stars,
+    resets: state.prestige.resets + 1,
+    bestRun: Math.max(state.prestige.bestRun, state.runEarnings),
+  };
+  const next: GameState = {
+    ...state,
+    prestige,
+    money: 0,
+    runEarnings: 0,
+    ports: [],
+    activePort: 0,
+    lastTickAt: now,
+  };
+  // Perks read the NEW star total, so a sale that crosses a milestone pays out
+  // its perk straight away.
+  next.money = startingMoney(next, cfg);
+  next.ports = [emptyPort(startingLevels(next))];
+  return { state: next, stars };
+}
+
+/** Pay a reward: money, any stars, and any boost (extending one that runs). */
+export function applyReward(state: GameState, reward: Reward, now: number): GameState {
+  return {
+    ...state,
+    money: state.money + reward.money,
+    lifetimeEarnings: state.lifetimeEarnings + reward.money,
+    runEarnings: state.runEarnings + reward.money,
+    prestige: reward.stars > 0 ? { ...state.prestige, stars: state.prestige.stars + reward.stars } : state.prestige,
+    boostUntil: reward.boostSeconds > 0 ? Math.max(now, state.boostUntil) + reward.boostSeconds * 1000 : state.boostUntil,
+  };
+}
+
+/** Claim today's login reward. Once per day; the streak grows on consecutive days. */
+export function claimLogin(
+  state: GameState,
+  day: number,
+  now: number,
+  cfg: BalanceConfig = BALANCE,
+): { state: GameState; reward: Reward | null } {
+  if (!canClaimLogin(state.daily, day)) return { state, reward: null };
+  const reward = loginReward(state.daily, day, totalIncome(state, cfg), dailyRewardMultiplier(state), cfg);
+  const continuing = state.daily.lastLoginDay === day - 1;
+  const daily: DailyState = { ...state.daily, lastLoginDay: day, streak: continuing ? state.daily.streak + 1 : 1 };
+  return { state: applyReward({ ...state, daily }, reward, now), reward };
+}
+
+/** Claim a finished contract. */
+export function claimContract(
+  state: GameState,
+  index: number,
+  now: number,
+  cfg: BalanceConfig = BALANCE,
+): { state: GameState; reward: Reward | null } {
+  const c = state.daily.contracts[index];
+  if (!c || c.claimed || c.progress < c.target) return { state, reward: null };
+  const reward = contractReward(c, totalIncome(state, cfg), dailyRewardMultiplier(state), cfg);
+  const contracts: Contract[] = state.daily.contracts.map((x, j) => (j === index ? { ...x, claimed: true } : x));
+  return { state: applyReward({ ...state, daily: { ...state.daily, contracts } }, reward, now), reward };
+}
+
+/** Welcome the VIP ship in port right now, if there is one. */
+export function claimVip(
+  state: GameState,
+  now: number,
+  cfg: BalanceConfig = BALANCE,
+): { state: GameState; reward: Reward | null } {
+  const vip = activeVip(state, now, cfg);
+  if (!vip) return { state, reward: null };
+  const reward = vipReward(totalIncome(state, cfg), dailyRewardMultiplier(state), cfg);
+  return { state: applyReward({ ...state, daily: { ...state.daily, lastVipSlot: vip.slot } }, reward, now), reward };
 }
 
 export function selectPort(state: GameState, index: number): GameState {
@@ -282,14 +412,47 @@ export function sanitise(
 
   const activePort = Math.min(Math.max(0, Math.floor(num(r.activePort, 0))), ports.length - 1);
 
+  const lifetimeEarnings = Math.max(0, num(r.lifetimeEarnings, 0));
+  const p = (r.prestige ?? {}) as Record<string, unknown>;
+  const d = (r.daily ?? {}) as Record<string, unknown>;
+  const t = (r.totals ?? {}) as Record<string, unknown>;
+  const kinds = ['ships', 'upgrades', 'earn'] as const;
+  const contracts: Contract[] = (Array.isArray(d.contracts) ? d.contracts : [])
+    .slice(0, 3)
+    .map((raw) => {
+      const c = (raw ?? {}) as Record<string, unknown>;
+      const kind = kinds.find((k) => k === c.kind) ?? 'ships';
+      const target = Math.max(1, num(c.target, 1));
+      return { kind, target, progress: Math.min(target, Math.max(0, num(c.progress, 0))), claimed: c.claimed === true };
+    });
+
   return {
     version: SAVE_VERSION,
     money: Math.max(0, num(r.money, cfg.player.startingMoney)),
-    lifetimeEarnings: Math.max(0, num(r.lifetimeEarnings, 0)),
+    lifetimeEarnings,
     ports,
     activePort,
     // A save from the future (clock moved back) would grant nothing anyway,
     // but clamping keeps the delta sane.
     lastTickAt: Math.min(num(r.lastTickAt, now), now),
+    // Saves from before prestige existed: the whole history is this run.
+    runEarnings: Math.max(0, num(r.runEarnings, lifetimeEarnings)),
+    prestige: {
+      stars: Math.max(0, Math.floor(num(p.stars, 0))),
+      resets: Math.max(0, Math.floor(num(p.resets, 0))),
+      bestRun: Math.max(0, num(p.bestRun, 0)),
+    },
+    daily: {
+      day: Math.floor(num(d.day, -1)),
+      contracts,
+      streak: Math.max(0, Math.floor(num(d.streak, 0))),
+      lastLoginDay: Math.floor(num(d.lastLoginDay, -1)),
+      lastVipSlot: Math.floor(num(d.lastVipSlot, -1)),
+    },
+    boostUntil: Math.max(0, num(r.boostUntil, 0)),
+    totals: {
+      ships: Math.max(0, num(t.ships, 0)),
+      upgrades: Math.max(0, num(t.upgrades, 0)),
+    },
   };
 }

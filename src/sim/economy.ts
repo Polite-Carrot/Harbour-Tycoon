@@ -4,6 +4,7 @@ import {
   type BalanceConfig,
   type UpgradeId,
 } from '../config/balance';
+import { incomeMultiplier, portDiscount, startingLevels } from './prestige';
 import type {
   BuyQuantity,
   DerivedStats,
@@ -29,8 +30,13 @@ export function portCost(owned: number, cfg: BalanceConfig = BALANCE): number {
   return cfg.ports.baseCost * Math.pow(cfg.ports.costGrowth, owned - 1);
 }
 
+/** What the next port actually costs this player, after Head Office perks. */
+export function portPrice(state: GameState, cfg: BalanceConfig = BALANCE): number {
+  return portCost(state.ports.length, cfg) * portDiscount(state);
+}
+
 export function canBuyPort(state: GameState, cfg: BalanceConfig = BALANCE): boolean {
-  return state.ports.length < cfg.ports.maxPorts && state.money >= portCost(state.ports.length, cfg);
+  return state.ports.length < cfg.ports.maxPorts && state.money >= portPrice(state, cfg);
 }
 
 export function portName(index: number, cfg: BalanceConfig = BALANCE): string {
@@ -136,11 +142,15 @@ export function resolveCount(
   return Math.min(quantity, headroom(id, level, cfg));
 }
 
-/** Everything one port's berth needs to run, computed from its upgrade levels. */
+/**
+ * Everything one port's berth needs to run, computed from its upgrade levels.
+ * `multiplier` is the player's permanent Reputation bonus (see prestige.ts).
+ */
 export function derivePortStats(
   port: PortState,
   portIndex: number,
   cfg: BalanceConfig = BALANCE,
+  multiplier = 1,
 ): DerivedStats {
   const { berth, cargo, upgrades } = cfg;
   const lv = port.upgrades;
@@ -161,10 +171,18 @@ export function derivePortStats(
 
   // Floodlights multiply what each ship is worth. Not bound by the cycle
   // floors, so the effect can sit where its price says it should.
-  const yieldMultiplier = Math.pow(upgrades.floodlights.effectPerLevel, lv.floodlights);
+  // The late tracks multiply yield too: trains clear the yard faster and
+  // cruise passengers spend in town.
+  const yieldMultiplier =
+    Math.pow(upgrades.floodlights.effectPerLevel, lv.floodlights) *
+    Math.pow(upgrades.railLink.effectPerLevel, lv.railLink) *
+    Math.pow(upgrades.cruise.effectPerLevel, lv.cruise);
 
+  // Dredging lets bigger ships in, so it compounds with ship size.
   const cargoPerShip =
-    cargo.baseUnitsPerShip * Math.pow(upgrades.shipSize.effectPerLevel, lv.shipSize);
+    cargo.baseUnitsPerShip *
+    Math.pow(upgrades.shipSize.effectPerLevel, lv.shipSize) *
+    Math.pow(upgrades.dredging.effectPerLevel, lv.dredging);
 
   const pricePerUnit =
     cargo.basePricePerUnit *
@@ -173,7 +191,7 @@ export function derivePortStats(
     scale;
 
   const cycleSeconds = arrivalSeconds + unloadSeconds;
-  const moneyPerShip = cargoPerShip * pricePerUnit * yieldMultiplier;
+  const moneyPerShip = cargoPerShip * pricePerUnit * yieldMultiplier * multiplier;
 
   return {
     arrivalSeconds,
@@ -195,13 +213,14 @@ export function deriveStats(
   cfg: BalanceConfig = BALANCE,
 ): DerivedStats {
   const i = Math.min(Math.max(0, index), state.ports.length - 1);
-  return derivePortStats(state.ports[i], i, cfg);
+  return derivePortStats(state.ports[i], i, cfg, incomeMultiplier(state, cfg));
 }
 
-/** Total income across every port the player owns. */
+/** Total income across every port the player owns, Reputation included. */
 export function totalIncome(state: GameState, cfg: BalanceConfig = BALANCE): number {
+  const mult = incomeMultiplier(state, cfg);
   return state.ports.reduce(
-    (sum, port, i) => sum + derivePortStats(port, i, cfg).moneyPerSecond,
+    (sum, port, i) => sum + derivePortStats(port, i, cfg, mult).moneyPerSecond,
     0,
   );
 }
@@ -266,7 +285,7 @@ export function incomeAfterNewPort(
   if (state.ports.length >= cfg.ports.maxPorts) return totalIncome(state, cfg);
   const probe: GameState = {
     ...state,
-    ports: [...state.ports, emptyPort()],
+    ports: [...state.ports, emptyPort(startingLevels(state))],
   };
   return totalIncome(probe, cfg);
 }
@@ -284,9 +303,8 @@ export function paybackSeconds(cost: number, incomeGain: number): number {
   return cost / incomeGain;
 }
 
-export function emptyPort(): PortState {
-  return {
-    upgrades: { cranes: 0, shipSize: 0, contracts: 0, tugboats: 0, floodlights: 0, customs: 0 },
-    berthCycleSeconds: 0,
-  };
+/** A fresh port, optionally with some levels already in place (a perk). */
+export function emptyPort(levels: Partial<Record<UpgradeId, number>> = {}): PortState {
+  const upgrades = Object.fromEntries(UPGRADE_ORDER.map((id) => [id, levels[id] ?? 0])) as Record<UpgradeId, number>;
+  return { upgrades, berthCycleSeconds: 0 };
 }

@@ -12,12 +12,32 @@ import { OfflineModal } from './src/ui/OfflineModal';
 import { SettingsButton } from './src/ui/SettingsButton';
 import { SettingsModal } from './src/ui/SettingsModal';
 import { PortSwitcher } from './src/ui/PortSwitcher';
+import { DailyModal, dailyBadge } from './src/ui/DailyModal';
+import { HeadOfficeModal } from './src/ui/HeadOfficeModal';
+import { MetaBar } from './src/ui/MetaBar';
+import { VipBanner } from './src/ui/VipBanner';
+import { starsFor } from './src/sim/prestige';
+import { today } from './src/state/useGame';
 import { PortView } from './src/ui/port/PortView';
 import { theme } from './src/ui/theme';
 
 export default function App() {
-  const { state, ready, offlineReport, buy, buyNewPort, choosePort, resetGame, dismissOfflineReport } =
-    useGame();
+  const {
+    state,
+    ready,
+    offlineReport,
+    buy,
+    buyNewPort,
+    choosePort,
+    resetGame,
+    dismissOfflineReport,
+    sell,
+    claimDailyLogin,
+    claimDailyContract,
+    welcomeVip,
+  } = useGame();
+  const [officeOpen, setOfficeOpen] = useState(false);
+  const [dailyOpen, setDailyOpen] = useState(false);
   const [quantity, setQuantity] = useState<BuyQuantity>(1);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -69,11 +89,20 @@ export default function App() {
           portCount={state.ports.length}
           port={view.port}
           stats={view.stats}
+          boostUntil={state.boostUntil}
         />
+        <VipBanner state={state} now={Date.now()} onWelcome={welcomeVip} />
         <SettingsButton onPress={() => setSettingsOpen(true)} />
       </View>
 
       <View style={styles.controls}>
+        <MetaBar
+          stars={state.prestige.stars}
+          pending={starsFor(state.runEarnings)}
+          dailyBadge={dailyBadge(state, today())}
+          onHeadOffice={() => setOfficeOpen(true)}
+          onDaily={() => setDailyOpen(true)}
+        />
         <PortSwitcher state={state} onSelect={choosePort} onBuyPort={buyNewPort} />
 
         <UpgradeCarousel
@@ -94,6 +123,24 @@ export default function App() {
           setSettingsOpen(false);
           void resetGame();
         }}
+      />
+
+      <HeadOfficeModal
+        visible={officeOpen}
+        state={state}
+        onSell={() => {
+          setOfficeOpen(false);
+          sell();
+        }}
+        onClose={() => setOfficeOpen(false)}
+      />
+      <DailyModal
+        visible={dailyOpen}
+        state={state}
+        day={today()}
+        onClaimLogin={claimDailyLogin}
+        onClaimContract={claimDailyContract}
+        onClose={() => setDailyOpen(false)}
       />
 
       <OfflineModal report={offlineReport} onDismiss={dismissOfflineReport} />

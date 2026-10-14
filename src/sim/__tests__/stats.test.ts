@@ -101,3 +101,15 @@ describe('payback time', () => {
     expect(paybackSeconds(0, 10)).toBe(Infinity);
   });
 });
+
+describe('formatCount', () => {
+  it('shows whole numbers without decimals, and shortens big ones', async () => {
+    const { formatCount } = await import('../format');
+    expect(formatCount(57)).toBe('57');
+    expect(formatCount(20)).toBe('20');
+    expect(formatCount(0)).toBe('0');
+    expect(formatCount(1234)).toBe('1,234');
+    expect(formatCount(12345)).toBe('12.3K');
+    expect(formatCount(NaN)).toBe('0');
+  });
+});

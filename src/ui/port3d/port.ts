@@ -230,7 +230,10 @@ export class PortLand {
     const canopies: Instance[] = [];
     for (let x = -400; x <= 400; x += 14) {
       if (Math.abs(x) < 175) continue;
-      this.tree(trunks, canopies, x + hash(x) * 5, 50 + hash(x + 1) * 40, x + 500);
+      // Clear of the rail link, which runs along z = 62 on the east side.
+      const z = 50 + hash(x + 1) * 40;
+      if (x > 0 && Math.abs(z - 62) < 6) continue;
+      this.tree(trunks, canopies, x + hash(x) * 5, z, x + 500);
     }
     const g = this.group;
     g.add(instanced(new THREE.CylinderGeometry(0.4, 0.55, 1, 6), mat(COLOURS.trunk), trunks));
