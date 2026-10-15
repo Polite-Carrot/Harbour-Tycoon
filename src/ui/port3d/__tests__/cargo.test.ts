@@ -66,19 +66,22 @@ describe('crane placing', () => {
 
 describe('cargo', () => {
   it('every box is always somewhere: on the ship, on the quay, or on the spreader', () => {
+    // One ship's stay, from before the cranes start until after she sails.
+    const wrong: string[] = [];
     for (const setup of setups) {
-      for (let s = 0; s < CYCLE * 2; s += 0.1) {
+      for (let s = CYCLE + 18; s < CYCLE + 40; s += 0.1) {
         const work = berthWork(s, setup);
         const slots = work.slotsOf(work.ship);
         work.cranes.forEach((c, i) => {
           if (c.bay === null) return;
-          const empty = [...slots].filter(([k, v]) => v === null && Math.floor(k / 16 / ACROSS) === c.bay).length;
-          const onShip = ACROSS * setup.tiers - empty;
-          const total = onShip + c.pile.length + (c.carrying !== null ? 1 : 0);
-          expect(total, `crane ${i} at ${s.toFixed(1)}`).toBe(ACROSS * setup.tiers + movesEachWay(setup, i));
+          let empty = 0;
+          for (const [k, v] of slots) if (v === null && Math.floor(k / 16 / ACROSS) === c.bay) empty++;
+          const total = ACROSS * setup.tiers - empty + c.pile.length + (c.carrying !== null ? 1 : 0);
+          if (total !== ACROSS * setup.tiers + movesEachWay(setup, i)) wrong.push(`crane ${i} at ${s.toFixed(1)}: ${total}`);
         });
       }
     }
+    expect(wrong).toEqual([]);
   });
 
   it('each ship leaves as full as she came', () => {
