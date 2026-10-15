@@ -4,6 +4,8 @@ import { GROUND_Y } from './crane';
 import { containerGeometry, containerMaterial, containerMesh } from './containers';
 import { buildSailboat } from './ship';
 import { Town } from './town';
+import { trees } from './flora';
+import type { Theme } from './theme';
 import { RTGS, RTG_BOXES, STACK_PITCH, isRtgStack, rtgWork, yardX, yardZ } from './yard';
 import { box, gableRoof, glowSprite, hash, mat, strut } from './util';
 
@@ -98,8 +100,15 @@ export class PortLand {
   private readonly boats: { g: THREE.Group; cx: number; cz: number; rx: number; rz: number; speed: number; phase: number }[] = [];
   private readonly gulls: { g: THREE.Group; wl: THREE.Group; wr: THREE.Group; r: number; h: number; speed: number; phase: number; cx: number; cz: number }[] = [];
 
-  constructor() {
-    this.windowMat = mat(0x34507a, { emissive: 0xffc966, emissiveIntensity: 0, roughness: 0.3 });
+  readonly theme: Theme;
+
+  /**
+   * @param theme     the port's setting (theme.ts)
+   * @param windowMat shared with the ships, so it outlives a rebuilt land
+   */
+  constructor(theme: Theme, windowMat: THREE.MeshStandardMaterial) {
+    this.theme = theme;
+    this.windowMat = windowMat;
     this.buildGround();
     this.buildQuayEdge();
     const { mesh, total } = this.buildYard();
@@ -133,8 +142,8 @@ export class PortLand {
   private buildGround() {
     const g = this.group;
     const concrete = mat(COLOURS.concrete, { roughness: 0.9 });
-    const grass = mat(COLOURS.grass, { roughness: 0.95 });
-    const sand = mat(COLOURS.sand, { roughness: 1 });
+    const grass = mat(this.theme.ground.grass, { roughness: 0.95 });
+    const sand = mat(this.theme.ground.sand, { roughness: 1 });
 
     // The quay itself: a concrete pier out to z = 0.
     const quay = box(340, 12, 104, concrete, 0, GROUND_Y - 6, 52);
@@ -250,18 +259,17 @@ export class PortLand {
   /** Coastal trees and lamps either side of the port. The town itself
    *  (streets, square, people, traffic) lives in town.ts. */
   private buildTown() {
-    const trunks: Instance[] = [];
-    const canopies: Instance[] = [];
+    const t = this.theme.trees;
+    const wild = trees(t.wild, t.leaves, t.trunk);
     for (let x = -400; x <= 400; x += 14) {
       if (Math.abs(x) < 175) continue;
       // Clear of the rail link, which runs along z = 62 on the east side.
       const z = 50 + hash(x + 1) * 40;
       if (x > 0 && Math.abs(z - 62) < 6) continue;
-      this.tree(trunks, canopies, x + hash(x) * 5, z, x + 500);
+      wild.plant(x + hash(x) * 5, GROUND_Y, z, x + 500, 1.25);
     }
     const g = this.group;
-    g.add(instanced(new THREE.CylinderGeometry(0.4, 0.55, 1, 6), mat(COLOURS.trunk), trunks));
-    g.add(instanced(new THREE.IcosahedronGeometry(1, 0), mat(0xffffff, { flatShading: true, roughness: 0.8 }), canopies));
+    wild.build(g);
 
     // Street lamps along the shed road and the waterfront.
     const pole = mat(0x4a5563);
@@ -281,49 +289,32 @@ export class PortLand {
       g.add(s);
     }
 
-    this.town = new Town(this.windowMat);
+    this.town = new Town(this.windowMat, this.theme);
     g.add(this.town.group);
-  }
-
-  private tree(trunks: Instance[], canopies: Instance[], x: number, z: number, seed: number) {
-    const h = 3 + hash(seed) * 3;
-    const s = 2.6 + hash(seed + 1) * 2.2;
-    trunks.push({ m: trs(x, GROUND_Y + h / 2, z, 1, h, 1), c: 0xffffff });
-    canopies.push({
-      m: trs(x, GROUND_Y + h + s * 0.7, z, s, s * 1.15, s, hash(seed) * 3),
-      c: COLOURS.leaves[Math.floor(hash(seed + 2) * COLOURS.leaves.length)],
-    });
   }
 
   private buildHills() {
     const g = this.group;
+    const th = this.theme;
     const geo = new THREE.IcosahedronGeometry(1, 2);
-    const hills = [
-      [-300, 360, 160, 50, 120, COLOURS.grassDark],
-      [-60, 420, 220, 70, 140, COLOURS.grass],
-      [220, 380, 180, 55, 110, COLOURS.grassDark],
-      [480, 330, 160, 45, 120, COLOURS.grass],
-      [-560, 300, 170, 60, 130, COLOURS.grass],
-      [-200, 700, 380, 190, 220, COLOURS.mountain],
-      [300, 760, 420, 230, 240, COLOURS.mountain],
-      [-700, 640, 300, 160, 200, COLOURS.mountain],
-      [750, 600, 300, 150, 200, COLOURS.mountain],
+    const flat = { flatShading: true, roughness: 1 };
+    // Near hills behind the town: rolling, or long low dunes in the desert.
+    const dunes = th.backdrop === 'mesas' ? 0.55 : 1;
+    const near = [
+      [-300, 360, 160, 50, 120, 0],
+      [-60, 420, 220, 70, 140, 1],
+      [220, 380, 180, 55, 110, 0],
+      [480, 330, 160, 45, 120, 1],
+      [-560, 300, 170, 60, 130, 1],
     ] as const;
-    for (const [x, z, sx, sy, sz, c] of hills) {
-      const m = new THREE.Mesh(geo, mat(c, { flatShading: true, roughness: 1 }));
-      m.scale.set(sx, sy, sz);
-      m.position.set(x, -sy * 0.15, z);
+    for (const [x, z, sx, sy, sz, shade] of near) {
+      const m = new THREE.Mesh(geo, mat(th.hills[shade], flat));
+      m.scale.set(sx, sy * dunes, sz);
+      m.position.set(x, -sy * dunes * 0.15, z);
       m.receiveShadow = true;
       g.add(m);
     }
-    // Snow caps on the far peaks.
-    const snow = mat(0xffffff, { flatShading: true });
-    for (const [x, z, sx, sy, sz] of hills.slice(5)) {
-      const cap = new THREE.Mesh(geo, snow);
-      cap.scale.set(sx * 0.32, sy * 0.3, sz * 0.32);
-      cap.position.set(x, sy * 0.66, z);
-      g.add(cap);
-    }
+    this.buildBackdrop(geo);
 
     // Islands out to sea, so the horizon is not empty.
     const islands = [
@@ -332,14 +323,111 @@ export class PortLand {
       [-60, -900, 120, 24, 70],
     ] as const;
     for (const [x, z, sx, sy, sz] of islands) {
-      const m = new THREE.Mesh(geo, mat(COLOURS.grassDark, { flatShading: true }));
+      const m = new THREE.Mesh(geo, mat(th.hills[0], { flatShading: true }));
       m.scale.set(sx, sy, sz);
       m.position.set(x, -sy * 0.3, z);
       g.add(m);
-      const beach = new THREE.Mesh(geo, mat(COLOURS.sand, { flatShading: true }));
+      const beach = new THREE.Mesh(geo, mat(th.ground.sand, { flatShading: true }));
       beach.scale.set(sx * 1.08, sy * 0.2, sz * 1.1);
       beach.position.set(x, -2, z);
       g.add(beach);
+    }
+  }
+
+  /** The far scenery that says where this port is. */
+  private buildBackdrop(geo: THREE.BufferGeometry) {
+    const g = this.group;
+    const th = this.theme;
+    const flat = { flatShading: true, roughness: 1 };
+    const far = [
+      [-200, 700, 380, 190, 220],
+      [300, 760, 420, 230, 240],
+      [-700, 640, 300, 160, 200],
+      [750, 600, 300, 150, 200],
+    ] as const;
+    const hill = (x: number, z: number, sx: number, sy: number, sz: number, colour: number, g2: THREE.BufferGeometry = geo) => {
+      const m = new THREE.Mesh(g2, mat(colour, flat));
+      m.scale.set(sx, sy, sz);
+      m.position.set(x, -sy * 0.15, z);
+      m.receiveShadow = true;
+      g.add(m);
+      return m;
+    };
+    const caps = (peaks: readonly (readonly number[])[], size: number) => {
+      const snow = mat(0xffffff, { flatShading: true });
+      for (const [x, z, sx, sy, sz] of peaks) {
+        const cap = new THREE.Mesh(geo, snow);
+        cap.scale.set(sx * size, sy * size * 0.94, sz * size);
+        cap.position.set(x, sy * (0.85 - size * 0.6), z);
+        g.add(cap);
+      }
+    };
+
+    switch (th.backdrop) {
+      case 'mountains':
+        for (const [x, z, sx, sy, sz] of far) hill(x, z, sx, sy, sz, th.far);
+        if (th.snowCaps) caps(far, 0.32);
+        break;
+      case 'peaks': {
+        // Taller, sharper northern mountains, deep in snow.
+        const peaks = far.map(([x, z, sx, sy, sz]) => [x, z, sx * 0.8, sy * 1.5, sz * 0.8] as const);
+        for (const [x, z, sx, sy, sz] of peaks) hill(x, z, sx, sy, sz, th.far);
+        caps(peaks, 0.45);
+        break;
+      }
+      case 'rocky':
+        for (const [x, z, sx, sy, sz] of far) hill(x, z, sx, sy * 0.75, sz, th.far);
+        break;
+      case 'mesas': {
+        // Flat-topped red rock with banded sides.
+        const rock = new THREE.CylinderGeometry(1, 1.25, 1, 7);
+        for (const [x, z, sx, sy, sz] of far) {
+          const h = sy * 0.7;
+          const m = new THREE.Mesh(rock, mat(th.far, flat));
+          m.scale.set(sx * 0.6, h, sz * 0.6);
+          m.position.set(x, h / 2 - 10, z);
+          g.add(m);
+          const band = new THREE.Mesh(rock, mat(0xe0a070, flat));
+          band.scale.set(sx * 0.61, h * 0.12, sz * 0.61);
+          band.position.set(x, h * 0.72 - 10, z);
+          g.add(band);
+        }
+        break;
+      }
+      case 'volcano': {
+        // Green hills round a smoking volcano.
+        for (const [x, z, sx, sy, sz] of far.filter((_, i) => i !== 1)) hill(x, z, sx, sy * 0.8, sz, th.far);
+        const cone = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 1, 1, 12), mat(0x6b5a4a, flat));
+        cone.scale.set(330, 300, 300);
+        cone.position.set(300, 120, 780);
+        g.add(cone);
+        const slopes = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 1.05, 1, 12), mat(th.far, flat));
+        slopes.scale.set(330, 150, 300);
+        slopes.position.set(300, 45, 780);
+        g.add(slopes);
+        for (let i = 0; i < 6; i++) {
+          const puff = glowSprite(0xd8dde2, 70 + i * 22);
+          puff.material.blending = THREE.NormalBlending;
+          puff.material.opacity = 0.5 - i * 0.06;
+          puff.position.set(300 + i * 18, 290 + i * 34, 780 + i * 6);
+          g.add(puff);
+        }
+        break;
+      }
+      case 'skyline': {
+        // Hazy hills, and the rest of the city filling the distance.
+        for (const [x, z, sx, sy, sz] of far) hill(x, z, sx, sy * 0.6, sz, th.far);
+        const towers: Instance[] = [];
+        for (let i = 0; i < 140; i++) {
+          const x = -720 + (i / 139) * 1440 + (hash(i * 3.1) - 0.5) * 12;
+          const z = 250 + hash(i * 7.3) * 230;
+          const h = 30 + Math.pow(hash(i * 1.9), 2) * 150 * (1 - Math.abs(x) / 900);
+          const w = 14 + hash(i * 5.7) * 20;
+          towers.push({ m: trs(x, GROUND_Y + h / 2, z, w, h, w * (0.7 + hash(i) * 0.6)), c: [0x9fb4c8, 0xb8c6d4, 0x8aa1b8, 0xc9d3dd, 0x7f97ae][i % 5] });
+        }
+        g.add(instanced(new THREE.BoxGeometry(1, 1, 1), mat(0xffffff, { roughness: 0.5, metalness: 0.2 }), towers));
+        break;
+      }
     }
   }
 

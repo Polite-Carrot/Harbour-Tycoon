@@ -105,14 +105,13 @@ export function glowSprite(color: number, size: number): THREE.Sprite {
   return s;
 }
 
-/** Free every geometry and material under a node. */
-export function disposeTree(root: THREE.Object3D) {
+/** Free every geometry and material under a node, except any in `keep` (shared ones). */
+export function disposeTree(root: THREE.Object3D, keep: readonly THREE.Material[] = []) {
   root.traverse((o) => {
     const mesh = o as THREE.Mesh;
     if (mesh.geometry) mesh.geometry.dispose();
     const m = mesh.material as THREE.Material | THREE.Material[] | undefined;
-    if (Array.isArray(m)) m.forEach((x) => x.dispose());
-    else m?.dispose();
+    for (const x of Array.isArray(m) ? m : m ? [m] : []) if (!keep.includes(x)) x.dispose();
   });
 }
 

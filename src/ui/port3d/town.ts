@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { GROUND_Y } from './crane';
-import { COLOURS, ROOFS, WALLS } from './palette';
+import { COLOURS } from './palette';
+import { trees, type Trees } from './flora';
+import type { Theme } from './theme';
 import { glow, hash, mat } from './util';
 
 /**
@@ -448,9 +450,11 @@ export class Town {
   private readonly pigeons: THREE.InstancedMesh;
   private readonly pigeonSpots: { x: number; z: number; yaw: number; phase: number }[] = [];
   private readonly windowMat: THREE.Material;
+  private readonly theme: Theme;
 
-  constructor(windowMat: THREE.Material) {
+  constructor(windowMat: THREE.Material, theme: Theme) {
     this.windowMat = windowMat;
+    this.theme = theme;
     this.buildStreets();
     const lampPoints: number[] = [];
     this.buildBlocks();
@@ -575,8 +579,9 @@ export class Town {
     const balconies: Instance[] = [];
     const rooftop: Instance[] = [];
     const chimneys: Instance[] = [];
-    const trunks: Instance[] = [];
-    const canopies: Instance[] = [];
+    const domes: Instance[] = [];
+    const style = this.theme.town;
+    const grove = this.grove();
     const yards: Instance[] = [];
 
     let n = 0;
@@ -589,7 +594,7 @@ export class Town {
         // The middle of town is taller and busier; the edges are houses.
         const zone = row <= 1 && centre < 170 ? 'city' : row <= 2 && centre < 300 ? 'town' : 'village';
         const depth = (b.z1 - b.z0) / 2 - 2.5;
-        yards.push({ m: trs(cx, G + KERB + 0.02, (b.z0 + b.z1) / 2, b.x1 - b.x0, 0.04, b.z1 - b.z0), c: 0x9fd987 });
+        yards.push({ m: trs(cx, G + KERB + 0.02, (b.z0 + b.z1) / 2, b.x1 - b.x0, 0.04, b.z1 - b.z0), c: this.theme.ground.yard });
 
         for (const facing of [-1, 1] as const) {
           // facing -1: front row, faces the street toward the harbour.
@@ -604,15 +609,21 @@ export class Town {
             const d = Math.min(depth, (zone === 'village' ? 9 : 11) + hash(n * 2.3) * 4);
             const faceZ = facing === -1 ? b.z0 : b.z1;
             const bz = faceZ - facing * d / 2;
-            const tall = zone === 'city' && hash(n * 2.9) > 0.4;
-            const h = tall ? 15 + hash(n * 3.1) * 22 : zone === 'village' ? 6 + hash(n * 3.7) * 4 : 9 + hash(n * 4.1) * 8;
+            const tall = zone === 'city' && hash(n * 2.9) < style.tallChance;
+            const span = (r: readonly [number, number], k: number) => r[0] + hash(n * k) * (r[1] - r[0]);
+            const h = tall ? span(style.tall, 3.1) : zone === 'village' ? span(style.village, 3.7) : span(style.town, 4.1);
             const base = G + KERB;
-            const wall = tall ? [0xffffff, 0xd0ebff, 0xfff3bf, 0xe5dbff, 0xffe8cc][n % 5] : WALLS[n % WALLS.length];
+            const wall = tall ? style.tallWalls[n % style.tallWalls.length] : style.walls[n % style.walls.length];
             walls.push({ m: trs(bx, base + h / 2, bz, w - 0.15, h, d), c: wall });
-            const roofColour = ROOFS[Math.floor(hash(n + 11) * ROOFS.length)];
-            const flat = h > 12;
+            const roofColour = style.roofs[Math.floor(hash(n + 11) * style.roofs.length)];
+            const flat = style.roof === 'flat' || h > 12;
             if (flat) {
               caps.push({ m: trs(bx, base + h + 0.35, bz, w + 0.3, 0.7, d + 0.3), c: roofColour });
+              // A dome on some roofs, where the style has them.
+              if (style.domes.length && hash(n * 4.4) > 0.72) {
+                const r = Math.min(w, d) * 0.28;
+                domes.push({ m: trs(bx, base + h + 0.7, bz, r, r, r), c: style.domes[Math.floor(hash(n * 5.5) * style.domes.length)] });
+              }
               // Plant rooms, water tanks and the odd rooftop garden.
               for (let k = 0; k < 2; k++) {
                 if (hash(n * 5 + k) > 0.55) continue;
@@ -643,6 +654,14 @@ export class Town {
             }
             const floors = Math.max(1, Math.floor((h - firstFloor) / 3.2));
             const cols = Math.max(1, Math.floor(w / 3));
+            if (style.glass && tall) {
+              // Glass towers: a window band the width of the face on every floor.
+              for (let f = 0; f < floors; f++) {
+                const target = hash(n * 13 + f * 5) < 0.55 ? lit : dark;
+                target.push({ m: trs(bx, base + firstFloor + f * 3.2, face, w - 0.8, 1.9, 0.16), c: 0xffffff });
+              }
+              continue;
+            }
             for (let f = 0; f < floors; f++) {
               for (let c = 0; c < cols; c++) {
                 const wx = bx - w / 2 + (c + 0.5) * (w / cols);
@@ -662,7 +681,7 @@ export class Town {
         for (let k = 0; k < 3; k++) {
           if (hash(n * 3 + k) > 0.7) continue;
           const tx = b.x0 + 6 + hash(n * 4 + k) * (b.x1 - b.x0 - 12);
-          this.tree(trunks, canopies, tx, (b.z0 + b.z1) / 2 + (hash(n + k) - 0.5) * 4, n * 10 + k, KERB);
+          grove.plant(tx, G + KERB, (b.z0 + b.z1) / 2 + (hash(n + k) - 0.5) * 4, n * 10 + k);
         }
       }
     }
@@ -675,24 +694,20 @@ export class Town {
     g.add(instanced(box, mat(0xffffff, { roughness: 0.6 }), caps));
     g.add(instanced(box, mat(0xffffff, { roughness: 0.6 }), rooftop));
     g.add(instanced(box, mat(0xffffff, { roughness: 0.8 }), chimneys));
+    if (domes.length) g.add(instanced(new THREE.SphereGeometry(1, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), mat(0xffffff, { roughness: 0.5 }), domes));
     g.add(instanced(box, this.windowMat, lit, false));
     g.add(instanced(box, mat(0x4a6488, { roughness: 0.25, metalness: 0.2 }), dark, false));
     g.add(instanced(box, this.windowMat, shops, false));
     g.add(instanced(box, mat(0xffffff, { roughness: 0.6 }), doors, false));
     g.add(instanced(box, mat(0xffffff, { roughness: 0.7 }), awnings));
     g.add(instanced(box, mat(0xffffff, { roughness: 0.5 }), balconies));
-    g.add(instanced(new THREE.CylinderGeometry(0.35, 0.5, 1, 6), mat(COLOURS.trunk), trunks));
-    g.add(instanced(new THREE.IcosahedronGeometry(1, 1), mat(0xffffff, { flatShading: true, roughness: 0.8 }), canopies));
+    grove.build(g);
   }
 
-  private tree(trunks: Instance[], canopies: Instance[], x: number, z: number, seed: number, lift = 0, scale = 1) {
-    const h = (2.6 + hash(seed) * 2) * scale;
-    const s = (2 + hash(seed + 1) * 1.6) * scale;
-    trunks.push({ m: trs(x, G + lift + h / 2, z, 1, h, 1), c: 0xffffff });
-    canopies.push({
-      m: trs(x, G + lift + h + s * 0.6, z, s, s * 1.1, s, hash(seed) * 3),
-      c: COLOURS.leaves[Math.floor(hash(seed + 2) * COLOURS.leaves.length)],
-    });
+  /** A batch of this town's kind of tree. */
+  private grove(): Trees {
+    const t = this.theme.trees;
+    return trees(t.town, t.leaves, t.trunk);
   }
 
   // --- pavement furniture ----------------------------------------------------------
@@ -700,8 +715,7 @@ export class Town {
   private buildStreetFurniture(lampPoints: number[]) {
     const poles: Instance[] = [];
     const heads: Instance[] = [];
-    const trunks: Instance[] = [];
-    const canopies: Instance[] = [];
+    const grove = this.grove();
     const bins: Instance[] = [];
     let n = 0;
     const lamp = (x: number, z: number) => {
@@ -718,7 +732,7 @@ export class Town {
           if (z === STREETS_Z[1] && side === 1 && Math.abs(x - SQUARE_CX) < 12) continue;
           n++;
           if (n % 3 === 0) lamp(x, pz);
-          else if (n % 3 === 1) this.tree(trunks, canopies, x, pz + side * 0.4, n * 17, KERB, 0.8);
+          else if (n % 3 === 1) grove.plant(x, G + KERB, pz + side * 0.4, n * 17, 0.8);
           else if (hash(n * 2) > 0.6) bins.push({ m: trs(x, G + KERB + 0.5, pz, 0.6, 1, 0.6), c: 0x2e7d32 });
         }
       }
@@ -730,7 +744,7 @@ export class Town {
           if (STREETS_Z.some((s) => Math.abs(s - z) < ROAD_HALF + 4)) continue;
           n++;
           if (n % 2) lamp(px, z);
-          else this.tree(trunks, canopies, px + side * 0.4, z, n * 23, KERB, 0.8);
+          else grove.plant(px + side * 0.4, G + KERB, z, n * 23, 0.8);
         }
       }
     }
@@ -738,8 +752,7 @@ export class Town {
     const box = new THREE.BoxGeometry(1, 1, 1);
     g.add(instanced(box, mat(0xffffff, { roughness: 0.5, metalness: 0.4 }), poles));
     g.add(instanced(box, this.windowMat, heads, false));
-    g.add(instanced(new THREE.CylinderGeometry(0.3, 0.42, 1, 6), mat(COLOURS.trunk), trunks));
-    g.add(instanced(new THREE.IcosahedronGeometry(1, 1), mat(0xffffff, { flatShading: true, roughness: 0.8 }), canopies));
+    grove.build(g);
     g.add(instanced(box, mat(0xffffff, { roughness: 0.6 }), bins));
   }
 
@@ -867,16 +880,14 @@ export class Town {
     g.add(instanced(new THREE.SphereGeometry(1, 8, 6), mat(0xffffff, { roughness: 0.5 }), produce));
 
     // Trees in planters at the corners, lamps round the edge.
-    const trunks: Instance[] = [];
-    const canopies: Instance[] = [];
+    const grove = this.grove();
     const planters: Instance[] = [];
     for (const [px, pz] of [[x0 + 3, z0 + 3], [x1 - 3, z0 + 3], [x0 + 3, z1 - 3], [x1 - 3, z1 - 3]]) {
       planters.push({ m: trs(px, top + 0.4, pz, 2.4, 0.8, 2.4), c: 0xc9b38f });
-      this.tree(trunks, canopies, px, pz, px * 3 + pz, KERB + 0.8, 1.2);
+      grove.plant(px, G + KERB + 0.8, pz, px * 3 + pz, 1.2);
     }
     g.add(instanced(box, mat(0xffffff, { roughness: 0.9 }), planters));
-    g.add(instanced(new THREE.CylinderGeometry(0.35, 0.5, 1, 6), mat(COLOURS.trunk), trunks));
-    g.add(instanced(new THREE.IcosahedronGeometry(1, 1), mat(0xffffff, { flatShading: true, roughness: 0.8 }), canopies));
+    grove.build(g);
 
     const posts: Instance[] = [];
     const corners: [number, number][] = [];
@@ -1078,15 +1089,13 @@ export class Town {
     g.add(flag);
 
     // Formal trees and hedges either side of the forecourt.
-    const trunks: Instance[] = [];
-    const canopies: Instance[] = [];
+    const grove = this.grove();
     const hedges: Instance[] = [];
     for (const side of [-1, 1]) {
-      for (let k = 0; k < 3; k++) this.tree(trunks, canopies, cx + side * (14 + k * 5), z0 + 1.5, 500 + k + side * 7, KERB, 0.9);
+      for (let k = 0; k < 3; k++) grove.plant(cx + side * (14 + k * 5), G + KERB, z0 + 1.5, 500 + k + side * 7, 0.9);
       hedges.push({ m: trs(cx + side * 17, base + 0.6, z1 - 1.5, 12, 1.2, 1.2), c: 0x2f9e44 });
     }
-    g.add(instanced(new THREE.CylinderGeometry(0.35, 0.5, 1, 6), mat(COLOURS.trunk), trunks));
-    g.add(instanced(new THREE.IcosahedronGeometry(1, 1), mat(0xffffff, { flatShading: true, roughness: 0.8 }), canopies));
+    grove.build(g);
     g.add(instanced(new THREE.BoxGeometry(1, 1, 1), mat(0xffffff, { roughness: 0.9 }), hedges));
     return flag;
   }

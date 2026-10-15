@@ -39,6 +39,15 @@ On the web the port is a full 3D scene (three.js) you can explore:
   clock tower keeps harbour time. A few hundred people walk the pavements,
   stroll the square, chat, shop and sit at the café, some with dogs, while
   cars circle the blocks and buses run the ring road (lights on at night).
+- **Every port is somewhere different.** The quay, cranes and yard work the
+  same everywhere, but each port has its own setting (`src/ui/port3d/theme.ts`):
+  Old Harbour is a green seaside town, Saltmere Quay a desert port with
+  sandstone houses, domes, palms and red mesas, Kestrel Bay a big city of glass
+  skyscrapers, Northreach a snowy northern harbour with pines and painted
+  wooden houses, Cape Verity a tropical island with pastel houses, palms and a
+  volcano, and Aurelia Deep a white-washed Mediterranean town with terracotta
+  roofs, blue domes and cypresses. Each has its own sea colour too. Switching
+  port rebuilds the land around you.
 - **Sea life.** A dolphin pod porpoises through the harbour, humpback whales
   blow, dive tail-up and breach out at sea, sharks patrol with their fins out,
   and schools of fish mill under the surface (now and then one jumps). A

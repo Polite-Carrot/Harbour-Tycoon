@@ -12,7 +12,8 @@ import { berthZ as berthZOf, shipsAt, tugCount, tugsAt } from './berthing';
 import { BOX_HEIGHT, DECK_Y, HULL_BEAM, HULL_LENGTH, ShipModel, buildTug, slotCentre } from './ship';
 import { SeaLife, type Sighting } from './sealife';
 import { SkyLayer } from './sky';
-import { disposeTree } from './util';
+import { themeFor } from './theme';
+import { disposeTree, mat } from './util';
 import { Water } from './water';
 
 export interface WorldInput {
@@ -52,7 +53,10 @@ export class HarbourWorld {
 
   private readonly skyLayer = new SkyLayer();
   private readonly water = new Water();
-  private readonly land = new PortLand();
+  /** Windows that light up at night: the town's, and the ships' and tugs'. */
+  private readonly windowMat = mat(0x34507a, { emissive: 0xffc966, emissiveIntensity: 0, roughness: 0.3 });
+  /** Everything on land; rebuilt in the port's own setting when you switch port. */
+  private land = new PortLand(themeFor(0), this.windowMat);
   private readonly hemi = new THREE.HemisphereLight(0xffffff, 0xffffff, 1);
   private readonly keyLight = new THREE.DirectionalLight(0xffffff, 3);
   private readonly fog = new THREE.Fog(0xc8f0ff, 500, 1800);
@@ -81,7 +85,7 @@ export class HarbourWorld {
     const s = this.scene;
     s.fog = this.fog;
     s.add(this.skyLayer.group, this.water.group, this.land.group, this.craneGroup, this.sea.group);
-    this.terminal = new CruiseTerminal(this.land.windowMat);
+    this.terminal = new CruiseTerminal(this.windowMat);
     s.add(this.rail.group, this.dredger.group, this.terminal.group, this.tallShip.group);
     this.dredger.onSplash = (x, y, z, power) => this.sea.splash(x, y, z, power);
 
@@ -101,7 +105,7 @@ export class HarbourWorld {
     s.add(this.keyLight, this.keyLight.target);
 
     for (let i = 0; i < 2; i++) {
-      const tug = buildTug(this.land.windowMat);
+      const tug = buildTug(this.windowMat);
       tug.visible = false;
       this.tugs.push(tug);
       s.add(tug);
@@ -142,6 +146,14 @@ export class HarbourWorld {
     this.water.update(t, sky, this.skyLayer.lightDir, sky.sunIntensity * this.skyLayer.lightHeight);
 
     const heightAt = (x: number, z: number) => this.water.heightAt(x, z, t);
+    const theme = themeFor(portIndex);
+    if (theme !== this.land.theme) {
+      this.scene.remove(this.land.group);
+      disposeTree(this.land.group, [this.windowMat]);
+      this.land = new PortLand(theme, this.windowMat);
+      this.scene.add(this.land.group);
+      this.water.setTint(theme.water);
+    }
     this.land.update(t, sky.lamps, up, heightAt, tod);
 
     // --- ships -----------------------------------------------------------------
@@ -153,8 +165,8 @@ export class HarbourWorld {
       this.disposeShips();
       this.ships = [
         // Ship k sails as model k % 2, with that model's load of boxes.
-        new ShipModel(livery, tiers, this.land.windowMat, portIndex, (s) => slotColour(variantOf(portIndex, 0), s), slotKey),
-        new ShipModel(livery, tiers, this.land.windowMat, portIndex + 3, (s) => slotColour(variantOf(portIndex, 1), s), slotKey),
+        new ShipModel(livery, tiers, this.windowMat, portIndex, (s) => slotColour(variantOf(portIndex, 0), s), slotKey),
+        new ShipModel(livery, tiers, this.windowMat, portIndex + 3, (s) => slotColour(variantOf(portIndex, 1), s), slotKey),
       ];
       this.ships.forEach((sh) => this.scene.add(sh.group));
       this.shipKey = shipKey;
@@ -292,7 +304,7 @@ export class HarbourWorld {
       this.scene.remove(sh.group);
       // Window material is shared with the land; detach before disposing.
       // Hulls carry a material per paint band, so look inside arrays too.
-      const shared = this.land.windowMat;
+      const shared = this.windowMat;
       sh.group.traverse((o) => {
         const mesh = o as THREE.Mesh;
         if (Array.isArray(mesh.material)) mesh.material = mesh.material.filter((m) => m !== shared);

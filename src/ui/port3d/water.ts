@@ -283,6 +283,13 @@ export class Water {
     this.group.add(bed, near, far);
   }
 
+  private tint: { colour: THREE.Color; amount: number } | null = null;
+
+  /** Pull the sea toward a colour (per port), or null for the plain palette. */
+  setTint(tint: { tint: number; amount: number } | null) {
+    this.tint = tint ? { colour: new THREE.Color(tint.tint), amount: tint.amount } : null;
+  }
+
   update(t: number, sky: Sky, lightDir: THREE.Vector3, lightStrength: number) {
     const u = this.uniforms;
     u.uTime.value = t;
@@ -290,6 +297,11 @@ export class Water {
     // bluer version of it.
     this.shallow.setHex(sky.water).offsetHSL(-0.02, 0.05, 0.08);
     this.deep.setHex(sky.water).offsetHSL(0.03, 0.05, -0.09);
+    if (this.tint) {
+      // The port's own sea: its hue and saturation, today's light.
+      tintToward(this.shallow, this.tint.colour, this.tint.amount);
+      tintToward(this.deep, this.tint.colour, this.tint.amount);
+    }
     (u.uShallow.value as THREE.Color).copy(this.shallow);
     (u.uDeep.value as THREE.Color).copy(this.deep);
     (u.uHorizon.value as THREE.Color).setHex(sky.horizon);
@@ -330,4 +342,16 @@ export class Water {
 function smooth(a: number, b: number, x: number) {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
   return t * t * (3 - 2 * t);
+}
+
+const _a = { h: 0, s: 0, l: 0 };
+const _b = { h: 0, s: 0, l: 0 };
+/** Move a colour's hue and saturation toward another's, keeping its lightness. */
+function tintToward(c: THREE.Color, target: THREE.Color, k: number) {
+  c.getHSL(_a);
+  target.getHSL(_b);
+  let dh = _b.h - _a.h;
+  if (dh > 0.5) dh -= 1;
+  if (dh < -0.5) dh += 1;
+  c.setHSL((_a.h + dh * k + 1) % 1, _a.s + (_b.s - _a.s) * k, _a.l + (_b.l - _a.l) * k * 0.5);
 }
