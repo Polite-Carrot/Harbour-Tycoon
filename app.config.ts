@@ -5,7 +5,7 @@ import type { ExpoConfig } from 'expo/config';
  *
  * GitHub Pages serves a project site from https://<user>.github.io/<repo>/,
  * but Expo's web export writes absolute asset URLs (/_expo/static/...). Those
- * 404 under a subpath, so the deploy workflow sets PAGES_BASE_URL=/Harbour-Tycoon
+ * 404 under a subpath, so `npm run publish:web` sets PAGES_BASE_URL=/Harbour-Tycoon
  * and Expo rewrites every asset URL to match.
  *
  * It stays empty for local dev and native builds, which are served from root.
