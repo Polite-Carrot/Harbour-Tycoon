@@ -37,7 +37,8 @@ export function waveScale(x: number, z: number): number {
   return s * (1 - smooth(480, 740, r));
 }
 
-const MAX_WAKES = 2;
+/** Two ships and two tugs. */
+const MAX_WAKES = 4;
 
 const VERT = /* glsl */ `
   uniform float uTime;

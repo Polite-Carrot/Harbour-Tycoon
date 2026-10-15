@@ -158,8 +158,10 @@ describe('the stability rule', () => {
     // A tripwire, not a design limit: capped tracks are safe at any size, but
     // a cap bump should not silently change the economy by orders of
     // magnitude without someone seeing this fail.
-    expect(totalMultiplier).toBeGreaterThan(100);
-    expect(totalMultiplier).toBeLessThan(20_000);
+    // Raised from 20K when Rail Link, Dredging and Cruise Terminal were added
+    // (~460x between them, on top of ~1.4K from floodlights and customs).
+    expect(totalMultiplier).toBeGreaterThan(100_000);
+    expect(totalMultiplier).toBeLessThan(1_000_000);
   });
 });
 

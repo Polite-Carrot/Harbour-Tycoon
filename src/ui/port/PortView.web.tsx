@@ -19,6 +19,9 @@ const SIGHTING_TEXT = {
   shark: '🦈 Shark fin!',
 } as const;
 const RECENTER_SECONDS = 0.9;
+/** Length of the Time Warp time-lapse, and what it sweeps through. */
+const WARP_MS = 3500;
+const DAY_MS = 24 * 60 * 60 * 1000;
 const HINT_MS = 6000;
 
 /**
@@ -169,7 +172,15 @@ export function PortView(props: PortViewProps) {
       }
       if (camera.position.y < 4) camera.position.y = 4;
 
-      world.update(propsRef.current, Date.now(), dt, camera);
+      // Time Warp: sweep the scene's clock through a whole day in a few
+      // seconds — sun, moon, ships and tugs all race. 24h is a whole number
+      // of harbour days and berth cycles, so it lands exactly where it began.
+      const ws = propsRef.current.warpStartedAt;
+      const wp = ws === undefined ? 1 : (performance.now() - ws) / WARP_MS;
+      const warping = wp >= 0 && wp < 1;
+      const offset = warping ? (wp < 0.5 ? 2 * wp * wp : 1 - (-2 * wp + 2) ** 2 / 2) * DAY_MS : 0;
+      world.update(propsRef.current, Date.now() + offset, warping ? Math.min(dt * 40, 0.25) : dt, camera);
+      if (warping) world.payout.visible = false;
       const seen = world.takeSighting();
       const wall = performance.now();
       if (seen && wall - (lastShown[seen.kind] ?? -1e9) > SIGHTING_COOLDOWN_MS[seen.kind]) {

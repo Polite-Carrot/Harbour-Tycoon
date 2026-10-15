@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { formatDuration, formatMoney, formatNumber } from '../sim/format';
+import { formatCount, formatDuration, formatMoney, formatNumber } from '../sim/format';
 import type { GameStats } from '../sim/stats';
 import { theme } from './theme';
 
@@ -48,7 +48,7 @@ export function SettingsModal({ visible, stats, onResume, onReset }: Props) {
               <View style={styles.lossList}>
                 <Loss label="Lifetime earnings" value={formatMoney(stats.lifetimeEarnings)} />
                 <Loss label="Ports" value={`${stats.portsOwned}`} />
-                <Loss label="Upgrades bought" value={formatNumber(stats.totalLevels)} />
+                <Loss label="Upgrades bought" value={formatCount(stats.totalLevels)} />
               </View>
 
               <Text style={styles.irreversible}>This cannot be undone.</Text>
@@ -85,7 +85,11 @@ export function SettingsModal({ visible, stats, onResume, onReset }: Props) {
                 <Row label="Busiest port" value={stats.bestPortName} />
                 <Row label="…earning" value={`${formatMoney(stats.bestPortIncome)}/s`} />
                 <Divider />
-                <Row label="Upgrades bought" value={formatNumber(stats.totalLevels)} />
+                <Row label="Reputation" value={`⭐ ${formatCount(stats.stars)}`} />
+                <Row label="Companies sold" value={formatCount(stats.resets)} />
+                <Row label="Ships handled, all time" value={formatCount(stats.shipsHandled)} />
+                <Divider />
+                <Row label="Upgrade levels owned" value={formatCount(stats.totalLevels)} />
                 <Row label="Ships per minute" value={formatNumber(stats.shipsPerMinute)} />
                 <Divider />
                 <Row

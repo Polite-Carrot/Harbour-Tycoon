@@ -4,8 +4,50 @@ import type { UpgradeId } from '../config/balance';
  * Current save schema version.
  * 1 -> single port stored flat on the root.
  * 2 -> `ports` array, so the player can own several.
+ * 3 -> prestige (Head Office), daily rewards, boosts and run totals.
+ * 4 -> Time Warp usage.
  */
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 4;
+
+/** Rewarded-ad Time Warps: how many today, and when the last one was. */
+export interface TimeWarpState {
+  /** Local day the `used` count belongs to. */
+  day: number;
+  used: number;
+  /** Epoch millis of the last warp, for the cooldown. 0 = never. */
+  lastAt: number;
+}
+
+/** Reputation earned by selling the company. Survives every reset. */
+export interface PrestigeState {
+  /** Total stars ever earned. Never spent: each adds income for good. */
+  stars: number;
+  /** How many times the company has been sold. */
+  resets: number;
+  /** Biggest single run, by earnings. */
+  bestRun: number;
+}
+
+export type ContractKind = 'ships' | 'upgrades' | 'earn';
+
+export interface Contract {
+  kind: ContractKind;
+  target: number;
+  progress: number;
+  claimed: boolean;
+}
+
+export interface DailyState {
+  /** Day number the contracts belong to (days since the epoch, local time). */
+  day: number;
+  contracts: Contract[];
+  /** Consecutive days the login reward was claimed. */
+  streak: number;
+  /** Day the login reward was last claimed, or -1. */
+  lastLoginDay: number;
+  /** VIP visit last welcomed, so each one pays once. */
+  lastVipSlot: number;
+}
 
 /** One port. Every port keeps its own upgrade levels and its own berth cycle. */
 export interface PortState {
@@ -33,6 +75,15 @@ export interface GameState {
   activePort: number;
   /** Epoch millis of the last time the sim was advanced. Drives offline delta. */
   lastTickAt: number;
+  /** Earned since the company was last sold. Reputation is paid on this. */
+  runEarnings: number;
+  prestige: PrestigeState;
+  daily: DailyState;
+  /** Epoch millis an income boost runs until (0 = none). */
+  boostUntil: number;
+  /** Lifetime counters, kept across resets. */
+  totals: { ships: number; upgrades: number };
+  timeWarp: TimeWarpState;
 }
 
 /** Stats derived from base config + one port's upgrade levels. Never persisted. */

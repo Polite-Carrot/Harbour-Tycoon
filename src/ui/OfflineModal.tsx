@@ -1,5 +1,4 @@
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import { BALANCE } from '../config/balance';
 import { formatDuration, formatMoney } from '../sim/format';
 import type { OfflineReport } from '../sim/types';
 import { theme } from './theme';
@@ -26,7 +25,7 @@ export function OfflineModal({
           {report.wasCapped && (
             <Text style={styles.capped}>
               Offline earnings are capped at{' '}
-              {formatDuration(BALANCE.offline.capSeconds)}.
+              {formatDuration(report.creditedSeconds)}. Head Office perks raise the cap.
             </Text>
           )}
 

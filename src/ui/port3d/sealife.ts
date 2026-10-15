@@ -937,6 +937,11 @@ export class SeaLife {
     }
   }
 
+  /** Throw up spray from anything else breaking the surface. */
+  splash(x: number, y: number, z: number, power: number) {
+    this.splashes.splash(x, y, z, power);
+  }
+
   /** Where the dolphins are right now, for the camera. */
   get pod(): THREE.Vector3 {
     return this.podCentre;

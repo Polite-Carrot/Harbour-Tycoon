@@ -1,6 +1,7 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { BALANCE } from '../config/balance';
-import { derivePortStats, portCost, portName, portScale } from '../sim/economy';
+import { derivePortStats, portName, portPrice, portScale } from '../sim/economy';
+import { incomeMultiplier } from '../sim/prestige';
 import { formatMoney, formatNumber } from '../sim/format';
 import type { GameState } from '../sim/types';
 import { theme } from './theme';
@@ -20,7 +21,8 @@ interface Props {
 export function PortSwitcher({ state, onSelect, onBuyPort }: Props) {
   const owned = state.ports.length;
   const canExpand = owned < BALANCE.ports.maxPorts;
-  const nextCost = canExpand ? portCost(owned) : 0;
+  const nextCost = canExpand ? portPrice(state) : 0;
+  const mult = incomeMultiplier(state);
   const affordable = canExpand && state.money >= nextCost;
 
   return (
@@ -32,7 +34,7 @@ export function PortSwitcher({ state, onSelect, onBuyPort }: Props) {
     >
       {state.ports.map((port, i) => {
         const active = i === state.activePort;
-        const stats = derivePortStats(port, i);
+        const stats = derivePortStats(port, i, undefined, mult);
         return (
           <Pressable
             key={i}

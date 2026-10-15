@@ -1,5 +1,6 @@
 import { BALANCE, UPGRADE_ORDER, type BalanceConfig } from '../config/balance';
 import { derivePortStats, portName, totalIncome } from './economy';
+import { incomeMultiplier, offlineCapSeconds } from './prestige';
 import type { GameState } from './types';
 
 /** A read-only summary of the whole game, for the settings panel. */
@@ -17,6 +18,10 @@ export interface GameStats {
   /** What a full offline window is currently worth. */
   offlineWindowValue: number;
   offlineCapSeconds: number;
+  stars: number;
+  resets: number;
+  shipsHandled: number;
+  upgradesBought: number;
 }
 
 /**
@@ -31,10 +36,11 @@ export function gameStats(state: GameState, cfg: BalanceConfig = BALANCE): GameS
   let bestPortIncome = -1;
   let bestPortIndex = 0;
 
+  const mult = incomeMultiplier(state, cfg);
   state.ports.forEach((port, i) => {
     for (const id of UPGRADE_ORDER) totalLevels += port.upgrades[id];
 
-    const stats = derivePortStats(port, i, cfg);
+    const stats = derivePortStats(port, i, cfg, mult);
     shipsPerMinute += 60 / stats.cycleSeconds;
 
     if (stats.moneyPerSecond > bestPortIncome) {
@@ -55,7 +61,11 @@ export function gameStats(state: GameState, cfg: BalanceConfig = BALANCE): GameS
     shipsPerMinute,
     bestPortName: portName(bestPortIndex, cfg),
     bestPortIncome: Math.max(0, bestPortIncome),
-    offlineWindowValue: income * cfg.offline.capSeconds * cfg.offline.efficiency,
-    offlineCapSeconds: cfg.offline.capSeconds,
+    offlineWindowValue: income * offlineCapSeconds(state, cfg) * cfg.offline.efficiency,
+    offlineCapSeconds: offlineCapSeconds(state, cfg),
+    stars: state.prestige.stars,
+    resets: state.prestige.resets,
+    shipsHandled: state.totals.ships,
+    upgradesBought: state.totals.upgrades,
   };
 }

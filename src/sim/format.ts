@@ -36,6 +36,17 @@ export function formatNumber(value: number): string {
   return value < 0 ? `-${body}` : body;
 }
 
+/**
+ * A whole-number count: stars, ships, levels. "57", not "57.0"; big counts
+ * still shorten ("12.3K").
+ */
+export function formatCount(value: number): string {
+  if (!Number.isFinite(value)) return '0';
+  const n = Math.floor(Math.abs(value));
+  if (n < 10_000) return `${value < 0 ? '-' : ''}${n.toLocaleString('en-US')}`;
+  return formatNumber(value);
+}
+
 /** 1234567 -> "$1.23M". The sign leads the symbol: -$5.00, not $-5.00. */
 export function formatMoney(value: number): string {
   const n = formatNumber(value);

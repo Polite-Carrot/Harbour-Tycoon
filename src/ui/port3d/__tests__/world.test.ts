@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { derivePortStats } from '../../../sim/economy';
 import type { PortState } from '../../../sim/types';
 import { craneCount } from '../../port/geometry';
+import { berthZ, CYCLE } from '../berthing';
 import { HarbourWorld } from '../HarbourWorld';
 
 /**
@@ -17,6 +18,9 @@ const upgrades = (n: number) => ({
   tugboats: Math.min(7, n),
   floodlights: Math.min(25, n),
   customs: n,
+  railLink: Math.min(20, n),
+  dredging: Math.min(15, n),
+  cruise: Math.min(12, n),
 });
 
 const portAt = (berthCycleSeconds: number, level = 0): PortState => ({
@@ -42,20 +46,18 @@ describe('3D harbour', () => {
     world.dispose();
   });
 
-  it('a berthed ship sits at the quay; an arriving one is still out at sea', () => {
+  it('a moored ship sits at the berth; an incoming one is still out at sea', () => {
     const world = new HarbourWorld();
-    const p0 = portAt(0);
-    const stats = derivePortStats(p0, 0);
+    const port = portAt(2);
+    const stats = derivePortStats(port, 0);
+    const k = 1000;
 
-    const berthed = portAt(stats.arrivalSeconds + stats.unloadSeconds * 0.5);
-    world.update({ port: berthed, portIndex: 0, stats, lastTickAt: 0 }, 0, 1 / 60, camera);
-    const atQuay = shipsIn(world).map((g) => g.position.x);
-    expect(atQuay.some((x) => Math.abs(x) < 0.5)).toBe(true);
+    world.update({ port, portIndex: 0, stats, lastTickAt: 0 }, (k * CYCLE + 28) * 1000, 1 / 60, camera);
+    const moored = shipsIn(world).map((g) => g.position);
+    expect(moored.some((p) => Math.abs(p.x) < 0.5 && Math.abs(p.z - berthZ(1)) < 0.5)).toBe(true);
 
-    const inbound = portAt(stats.arrivalSeconds * 0.6);
-    world.update({ port: inbound, portIndex: 0, stats, lastTickAt: 0 }, 0, 1 / 60, camera);
-    const xs = shipsIn(world).map((g) => g.position.x);
-    expect(xs.some((x) => x < -20)).toBe(true);
+    world.update({ port, portIndex: 0, stats, lastTickAt: 0 }, (k * CYCLE + 2) * 1000, 1 / 60, camera);
+    expect(shipsIn(world).some((g) => g.position.x < -100)).toBe(true);
     world.dispose();
   });
 

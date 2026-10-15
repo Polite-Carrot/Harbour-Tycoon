@@ -1,7 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Platform, type AppStateStatus } from 'react-native';
 import { BALANCE, type UpgradeId } from '../config/balance';
-import { buyPort, buyUpgrade, catchUp, createNewGame, selectPort } from '../sim/engine';
+import { dayIndex, rollDay } from '../sim/daily';
+import { totalIncome } from '../sim/economy';
+import {
+  buyPort,
+  buyUpgrade,
+  catchUp,
+  claimContract,
+  claimLogin,
+  claimTimeWarp,
+  claimVip,
+  createNewGame,
+  selectPort,
+  sellCompany,
+} from '../sim/engine';
+import { gameStats } from '../sim/stats';
 import type { BuyQuantity, GameState, OfflineReport } from '../sim/types';
 import { clearSave, loadGame, saveGame } from './persistence';
 
@@ -11,6 +25,16 @@ import { clearSave, loadGame, saveGame } from './persistence';
  * The sim itself is untouched by anything in here — this hook only decides
  * WHEN to call it (every UI tick, on resume, on purchase) and when to persist.
  */
+/** Today's day number in the player's own time zone. */
+export const today = (now = Date.now()) => dayIndex(now, new Date(now).getTimezoneOffset());
+
+/** Turn the daily state over at local midnight: new contracts, streak check. */
+function withToday(state: GameState, now: number): GameState {
+  const day = today(now);
+  if (state.daily.day === day) return state;
+  return rollDay(state, day, totalIncome(state), gameStats(state).shipsPerMinute);
+}
+
 export function useGame() {
   // The authoritative state lives in a ref so ticks never read a stale
   // closure; `snapshot` is just the copy React renders.
@@ -30,7 +54,7 @@ export function useGame() {
       const current = stateRef.current;
       if (!current) return;
       const { result, report } = catchUp(current, now, BALANCE, offline);
-      commit(result.state);
+      commit(withToday(result.state, now));
       if (report && report.awaySeconds >= BALANCE.offline.minReportSeconds && report.earned > 0) {
         setOfflineReport(report);
       }
@@ -168,6 +192,48 @@ export function useGame() {
     [act],
   );
 
+  const sell = useCallback(() => {
+    act((s) => {
+      const r = sellCompany(s, Date.now());
+      return { state: r.state, changed: r.stars > 0 };
+    });
+  }, [act]);
+
+  const claimDailyLogin = useCallback(() => {
+    act((s) => {
+      const r = claimLogin(s, today(), Date.now());
+      return { state: r.state, changed: !!r.reward };
+    });
+  }, [act]);
+
+  const claimDailyContract = useCallback(
+    (index: number) => {
+      act((s) => {
+        const r = claimContract(s, index, Date.now());
+        return { state: r.state, changed: !!r.reward };
+      });
+    },
+    [act],
+  );
+
+  const welcomeVip = useCallback(() => {
+    act((s) => {
+      const r = claimVip(s, Date.now());
+      return { state: r.state, changed: !!r.reward };
+    });
+  }, [act]);
+
+  /** Pay a Time Warp. Returns what it paid (0 if refused). Call after the ad. */
+  const warp = useCallback((): number => {
+    let paid = 0;
+    act((s) => {
+      const r = claimTimeWarp(s, today(), Date.now());
+      paid = r.earned;
+      return { state: r.state, changed: r.earned > 0 };
+    });
+    return paid;
+  }, [act]);
+
   const resetGame = useCallback(async () => {
     await clearSave();
     commit(createNewGame(Date.now()));
@@ -185,5 +251,10 @@ export function useGame() {
     choosePort,
     resetGame,
     dismissOfflineReport,
+    sell,
+    claimDailyLogin,
+    claimDailyContract,
+    welcomeVip,
+    warp,
   };
 }

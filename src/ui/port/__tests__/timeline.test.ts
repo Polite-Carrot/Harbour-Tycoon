@@ -4,7 +4,7 @@ import type { PortState } from '../../../sim/types';
 import { berthMoment } from '../timeline';
 
 const port = (berthCycleSeconds: number): PortState => ({
-  upgrades: { cranes: 0, shipSize: 0, contracts: 0, tugboats: 0, floodlights: 0, customs: 0 },
+  upgrades: { cranes: 0, shipSize: 0, contracts: 0, tugboats: 0, floodlights: 0, customs: 0, railLink: 0, dredging: 0, cruise: 0 },
   berthCycleSeconds,
 });
 

@@ -16,7 +16,10 @@ export type UpgradeId =
   | 'contracts'
   | 'tugboats'
   | 'floodlights'
-  | 'customs';
+  | 'customs'
+  | 'railLink'
+  | 'dredging'
+  | 'cruise';
 
 export interface UpgradeConfig {
   readonly id: UpgradeId;
@@ -89,6 +92,46 @@ export interface BalanceConfig {
     readonly efficiency: number;
     /** Away time below this is treated as a normal tick, no "while away" popup. */
     readonly minReportSeconds: number;
+  };
+  /**
+   * Selling the company: start over with Reputation stars that raise income
+   * for good, and unlock Head Office perks at star milestones.
+   */
+  readonly prestige: {
+    /** A run must earn at least this much before it is worth a star. */
+    readonly minEarnings: number;
+    /** stars = floor(starScale * (log10(runEarnings) - log10(minEarnings)) + 1) */
+    readonly starScale: number;
+    /** Permanent income bonus per star, additive: 0.1 = +10% each. */
+    readonly incomePerStar: number;
+  };
+  /** Reasons to come back every day. */
+  readonly daily: {
+    /** Login streak: minutes of income paid on streak day 1..7 (cycles). */
+    readonly loginMinutes: readonly number[];
+    /** Stars added on every 7th consecutive day. */
+    readonly weeklyStars: number;
+    /** How many minutes of income each kind of contract pays. */
+    readonly contractMinutes: { readonly ships: number; readonly upgrades: number; readonly earn: number };
+    /** Income multiplier while a boost runs, and how long a contract's boost lasts. */
+    readonly boostMultiplier: number;
+    readonly contractBoostSeconds: number;
+    /** A VIP ship calls once per period, for `vipSeconds`, at a seeded time. */
+    readonly vipPeriodSeconds: number;
+    readonly vipSeconds: number;
+    readonly vipMinutes: number;
+  };
+  /**
+   * Time Warp: watch a rewarded ad to collect a stretch of income at once.
+   * Limited, so it is a treat rather than the way to play.
+   */
+  readonly timeWarp: {
+    /** How much income one warp pays, in seconds of the current rate. */
+    readonly seconds: number;
+    /** Warps allowed per local day. */
+    readonly perDay: number;
+    /** Minimum gap between warps. */
+    readonly cooldownSeconds: number;
   };
   readonly runtime: {
     /** How often the UI recomputes. Display cadence only — the sim is
@@ -239,6 +282,47 @@ export const BALANCE: BalanceConfig = {
       effectPerLevel: 1.13,
       maxLevel: 40,
     },
+
+    // ---- The late tracks ---------------------------------------------------
+    // Bought from the second or third hour of a run. All CAPPED (see the
+    // stability rule), each dearer and stronger than the last so the value
+    // ladder keeps climbing (1.13 < 1.135 < 1.14 < 1.145), all inside the
+    // 1.15 cost-growth ceiling. Together they are worth ~460x per port. Each
+    // visibly builds something in the 3D port: a railway, a dredger and
+    // bigger ships, a cruise terminal.
+
+    // Rail Link: freight trains clear the yard straight inland.
+    railLink: {
+      id: 'railLink',
+      name: 'Rail Link',
+      blurb: 'Trains haul cargo inland',
+      baseCost: 5_000_000,
+      costGrowth: 1.15,
+      effectPerLevel: 1.135,
+      maxLevel: 20,
+    },
+
+    // Dredging: a deeper channel lets bigger ships in, so each carries more.
+    dredging: {
+      id: 'dredging',
+      name: 'Dredging',
+      blurb: 'Deeper berths for bigger ships',
+      baseCost: 200_000_000,
+      costGrowth: 1.15,
+      effectPerLevel: 1.14,
+      maxLevel: 15,
+    },
+
+    // Cruise Terminal: liners call, and their passengers spend in town.
+    cruise: {
+      id: 'cruise',
+      name: 'Cruise Terminal',
+      blurb: 'Tourists spend big in town',
+      baseCost: 10_000_000_000,
+      costGrowth: 1.15,
+      effectPerLevel: 1.145,
+      maxLevel: 12,
+    },
   },
 
   ports: {
@@ -266,6 +350,34 @@ export const BALANCE: BalanceConfig = {
     minReportSeconds: 60,
   },
 
+  prestige: {
+    // Worth selling from about the two-hour mark ($1B earned is the first
+    // star). A first full run is worth ~30-50 stars and later runs a little
+    // more, so the 800-star perk is dozens of runs away.
+    minEarnings: 1e9,
+    starScale: 1.5,
+    incomePerStar: 0.1,
+  },
+
+  daily: {
+    loginMinutes: [10, 15, 20, 25, 30, 35, 45],
+    weeklyStars: 2,
+    contractMinutes: { ships: 15, upgrades: 20, earn: 30 },
+    boostMultiplier: 2,
+    contractBoostSeconds: 15 * 60,
+    vipPeriodSeconds: 15 * 60,
+    vipSeconds: 120,
+    vipMinutes: 10,
+  },
+
+  timeWarp: {
+    // A full day of income. Early on that is an hour or two of progress;
+    // late in a run, when income doubles every few minutes, it is a nudge.
+    seconds: 24 * 60 * 60,
+    perDay: 3,
+    cooldownSeconds: 2 * 60 * 60,
+  },
+
   runtime: {
     uiTickMs: 100,
     autosaveSeconds: 15,
@@ -284,4 +396,7 @@ export const UPGRADE_ORDER: readonly UpgradeId[] = [
   'tugboats',
   'floodlights',
   'customs',
+  'railLink',
+  'dredging',
+  'cruise',
 ];
