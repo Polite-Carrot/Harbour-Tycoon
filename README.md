@@ -193,25 +193,30 @@ npm run build:web  # static web bundle into dist/
 
 ## Playing it on GitHub Pages
 
-Pushing to `main` builds and deploys automatically
-(`.github/workflows/pages.yml`). It runs typecheck and tests first, so a broken
-build never reaches the site.
+The site is served straight from `main`, with no GitHub Actions: Settings ->
+Pages -> **Deploy from a branch** -> `main`, `/ (root)`. The built game is
+committed in the repo root next to the source (`index.html`, `favicon.ico`,
+`metadata.json`, `_expo/`, `.nojekyll`), so publishing an update is:
 
-**One-time setup:** repo Settings -> Pages -> Source -> **GitHub Actions**.
-Not "Deploy from a branch" — the site is built, not committed.
+```bash
+npm run publish:web   # typecheck, test, build, copy the build into the root
+git add -A && git commit -m "Publish" && git push   # to main
+```
 
-The site lands at `https://polite-carrot.github.io/Harbour-Tycoon/`.
+`publish:web` refuses to build if the typecheck or tests fail, and replaces
+the previous build (the bundle's file name changes every time). The site
+lands at `https://polite-carrot.github.io/Harbour-Tycoon/`.
 
-Two things about that URL are load-bearing:
+Two things about this are load-bearing:
 
 - **It is a subpath, not a root.** Expo's web export writes absolute asset
-  URLs (`/_expo/static/...`), which 404 under `/Harbour-Tycoon/`. The workflow
-  sets `PAGES_BASE_URL` and `app.config.ts` feeds it to `experiments.baseUrl`
-  so every URL is rewritten. The var is derived from the repo name, so a fork
-  or a rename still builds. Locally it is empty, so dev still serves from root.
+  URLs (`/_expo/static/...`), which 404 under `/Harbour-Tycoon/`. The
+  publish script sets `PAGES_BASE_URL` (default `/Harbour-Tycoon`) and
+  `app.config.ts` feeds it to `experiments.baseUrl` so every URL is
+  rewritten. Locally it is empty, so dev still serves from root.
 - **`.nojekyll` is required.** Pages otherwise runs Jekyll, which drops
-  underscore-prefixed directories — silently deleting the entire `_expo/`
-  bundle and leaving a blank page.
+  underscore-prefixed directories (the whole `_expo/` bundle) and shows this
+  README instead of the game.
 
 Saves use `localStorage` on web, so progress is per-browser and does not follow
 you between devices. Closing a tab is handled: `pagehide`/`beforeunload` flush
