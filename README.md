@@ -46,8 +46,25 @@ On the web the port is a full 3D scene (three.js) you can explore:
   skyscrapers, Northreach a snowy northern harbour with pines and painted
   wooden houses, Cape Verity a tropical island with pastel houses, palms and a
   volcano, and Aurelia Deep a white-washed Mediterranean town with terracotta
-  roofs, blue domes and cypresses. Each has its own sea colour too. Switching
-  port rebuilds the land around you.
+  roofs, blue domes and cypresses. Past those, Hanami Wharf is a Japanese
+  harbour in cherry blossom, Tulpenhaven a Dutch town of brick and windmills,
+  Kilima Coast a savanna town under acacias with a snowy giant on the horizon,
+  and Neo Arcadia a neon city of the future. Each has its own sea colour, and
+  its own town square: the same square of stalls, café and benches, round its
+  own landmark (fountain, oasis pavilion, steel ring, Christmas tree,
+  bandstand, tiled fountain, torii gate and koi pond, windmill, baobab, neon
+  spire) with the town hall in local colours (`square.ts`). Switching port
+  rebuilds the land around you.
+- **Four fun ports past the tenth.** Same economy, whole new worlds
+  (`worlds.ts`, `models/vessels.ts`): **Skull Rock Cove**, a pirate cove
+  where galleons bring in treasure chests under a skull-shaped crag;
+  **Coral Deep**, a city on the seabed with cargo submarines, mini-sub tugs,
+  kelp, coral and the sea life swimming round; **Tranquility Base** on the
+  moon, with space freighters hovering over a cratered landing field and
+  Earth in the black sky; and **Orbital One**, a space station where
+  freighters dock in the void below a ringed planet, nudged in by thruster
+  drones. Every vessel keeps the container ship's cargo layout, so the
+  cranes work them all the same way.
 - **Sea life.** A dolphin pod porpoises through the harbour, humpback whales
   blow, dive tail-up and breach out at sea, sharks patrol with their fins out,
   and schools of fish mill under the surface (now and then one jumps). A
@@ -542,8 +559,9 @@ Reputation multiplier is applied in `derivePortStats` via `totalIncome` /
 - One berth per port. Several berths within a port would need
   `berthCycleSeconds` to become an array (the closed-form maths is per-berth
   and unchanged).
-- Six ports is the ceiling, and the switcher is a horizontal strip — it will
-  need rethinking if that ever grows.
+- Fourteen ports is the ceiling (`BALANCE.ports.maxPorts`): ten real harbours and four fun ones. Prices still rise
+  20,000x a port, so the last ones are long-term goals that take several runs
+  and Head Office's discounts to reach.
 - Cargo sells instantly at the dock. There is no warehouse, so no storage cap
   and nothing to overflow.
 - Cranes stop being worth buying at level 30 by design. Nothing in the UI says

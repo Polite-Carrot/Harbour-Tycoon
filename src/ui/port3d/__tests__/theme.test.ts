@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { derivePortStats } from '../../../sim/economy';
 import { HarbourWorld } from '../HarbourWorld';
 import { PortLand } from '../port';
+import { BALANCE } from '../../../config/balance';
+import { buildCentrepiece } from '../square';
 import { THEMES, themeFor } from '../theme';
 
 /** Each port has its own setting around the same working quay. */
@@ -26,12 +28,28 @@ const tallest = (land: PortLand) => {
 };
 
 describe('port settings', () => {
-  it('six distinct settings, and ports past the sixth wrap round', () => {
-    expect(new Set(THEMES.map((t) => t.id)).size).toBe(6);
+  it('a distinct setting for every port, wrapping after the last', () => {
+    expect(THEMES).toHaveLength(BALANCE.ports.maxPorts);
+    expect(BALANCE.ports.names).toHaveLength(BALANCE.ports.maxPorts);
+    expect(new Set(THEMES.map((t) => t.id)).size).toBe(THEMES.length);
     expect(themeFor(0).id).toBe('temperate');
     expect(themeFor(1).id).toBe('desert');
     expect(themeFor(2).id).toBe('metropolis');
-    expect(themeFor(7)).toBe(themeFor(1));
+    expect(themeFor(BALANCE.ports.maxPorts + 1)).toBe(themeFor(1));
+  });
+
+  it('every square has its own centrepiece, and it builds', () => {
+    expect(new Set(THEMES.map((t) => t.square.centre)).size).toBe(THEMES.length);
+    for (const theme of THEMES) {
+      const c = buildCentrepiece(theme, 0, 0, 0);
+      expect(c.group.children.length, theme.id).toBeGreaterThan(0);
+      expect(() => c.animate(12.3, 1)).not.toThrow();
+      // It stays inside the flower ring.
+      const box = new THREE.Box3().setFromObject(c.group);
+      expect(Math.max(-box.min.x, box.max.x, -box.min.z, box.max.z), theme.id).toBeLessThan(6.4);
+      // Only fountains have the fountain spray.
+      expect(c.spray).toBe(theme.square.centre === 'fountain' || theme.square.centre === 'mosaic');
+    }
   });
 
   it('every setting builds', () => {
