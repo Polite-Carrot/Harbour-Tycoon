@@ -22,6 +22,8 @@ import { useRewardedAd } from './src/ads/rewardedAd';
 import { TimeWarpButton, TimeWarpModal } from './src/ui/TimeWarp';
 import { PortView } from './src/ui/port/PortView';
 import { theme } from './src/ui/theme';
+import { PanelHandle } from './src/ui/PanelHandle';
+import { usePanelOpen } from './src/state/usePanelOpen';
 
 export default function App() {
   const {
@@ -59,6 +61,7 @@ export default function App() {
   const [officeOpen, setOfficeOpen] = useState(false);
   const [dailyOpen, setDailyOpen] = useState(false);
   const [quantity, setQuantity] = useState<BuyQuantity>(1);
+  const [panelOpen, togglePanel] = usePanelOpen();
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   const view = useMemo(() => {
@@ -79,7 +82,9 @@ export default function App() {
       }),
     ) as Record<UpgradeId, number>;
 
-    return { index, port, stats, income, entries, gains, summary: gameStats(state) };
+    // What the hidden panel would offer: affordable, not maxed, and still worth buying.
+    const ready = entries.filter((e) => e.affordable && !e.maxed && (gains[e.id] ?? 0) > 0).length;
+    return { index, port, stats, income, entries, gains, ready, summary: gameStats(state) };
   }, [state, quantity]);
 
   if (!ready || !state || !view) {
@@ -117,7 +122,9 @@ export default function App() {
         <SettingsButton onPress={() => setSettingsOpen(true)} />
       </View>
 
-      <View style={styles.controls}>
+      <PanelHandle open={panelOpen} ready={view.ready} onToggle={togglePanel} />
+      {/* Tucked away, the harbour gets the whole screen. */}
+      <View style={[styles.controls, !panelOpen && styles.hidden]}>
         <MetaBar
           stars={state.prestige.stars}
           pending={starsFor(state.runEarnings)}
@@ -192,5 +199,6 @@ const styles = StyleSheet.create({
   // The harbour takes every pixel the controls do not need.
   scene: { flex: 1, width: '100%' },
   controls: { flexGrow: 0, paddingBottom: 4 },
+  hidden: { display: 'none' },
   dim: { color: theme.textDim, fontSize: 13 },
 });
