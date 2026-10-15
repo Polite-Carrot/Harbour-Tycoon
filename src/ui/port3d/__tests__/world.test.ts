@@ -36,8 +36,9 @@ const shipsIn = (world: HarbourWorld) => world.visibleShips();
 describe('3D harbour', () => {
   it('builds and steps at every upgrade level and port without throwing', () => {
     const world = new HarbourWorld();
-    for (const level of [0, 5, 12, 30, 200]) {
-      for (const portIndex of [0, 1, 7]) {
+    // Port outermost: switching port rebuilds the land around it.
+    for (const portIndex of [0, 1, 7]) {
+      for (const level of [0, 5, 12, 30, 200]) {
         const port = portAt(1.5, level);
         const stats = derivePortStats(port, portIndex);
         world.update({ port, portIndex, stats, lastTickAt: 0 }, 0, 1 / 60, camera);
