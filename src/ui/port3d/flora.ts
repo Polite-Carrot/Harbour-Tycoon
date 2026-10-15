@@ -60,6 +60,7 @@ const crowns: Record<TreeKind, () => THREE.BufferGeometry> = {
   palm: frondGeometry,
   cactus: armsGeometry,
   cypress: () => new THREE.IcosahedronGeometry(1, 1),
+  acacia: () => new THREE.IcosahedronGeometry(1, 1),
 };
 
 export interface Trees {
@@ -107,6 +108,14 @@ export function trees(kind: TreeKind, leaves: readonly number[], trunkColour: nu
           const h = (2.4 + r(0) * 2.2) * size;
           trunks.push({ m: trs(x, y + h / 2, z, 0.75, h, 0.75), c: leaf(seed) });
           tops.push({ m: trs(x, y + h, z, h * 0.9, h, h * 0.9, spin), c: leaf(seed) });
+          break;
+        }
+        case 'acacia': {
+          // A tall bare trunk and a wide, flat umbrella of a crown.
+          const h = (3.6 + r(0) * 2) * size;
+          const s = (3 + r(1) * 1.6) * size;
+          trunks.push({ m: trs(x, y + h / 2, z, 0.6, h, 0.6, spin, (r(2) - 0.5) * 0.15), c: trunkColour });
+          tops.push({ m: trs(x, y + h + s * 0.15, z, s * 1.5, s * 0.32, s * 1.4, spin), c: leaf(seed) });
           break;
         }
         case 'cypress': {

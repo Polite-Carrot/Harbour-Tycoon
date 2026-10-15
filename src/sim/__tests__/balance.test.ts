@@ -357,7 +357,7 @@ describe('ports', () => {
   it('refuses a port the player cannot afford, and the one past the cap', () => {
     expect(buyPort(createNewGame(0, BALANCE), BALANCE).bought).toBe(false);
 
-    let rich: GameState = { ...createNewGame(0, BALANCE), money: 1e30 };
+    let rich: GameState = { ...createNewGame(0, BALANCE), money: 1e60 };
     for (let i = 1; i < BALANCE.ports.maxPorts; i++) {
       const r = buyPort(rich, BALANCE);
       expect(r.bought).toBe(true);

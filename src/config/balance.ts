@@ -326,7 +326,7 @@ export const BALANCE: BalanceConfig = {
   },
 
   ports: {
-    maxPorts: 6,
+    maxPorts: 10,
     baseCost: 20_000,
     costGrowth: 20_000,
     scaleGrowth: 12,
@@ -337,6 +337,10 @@ export const BALANCE: BalanceConfig = {
       'Northreach',
       'Cape Verity',
       'Aurelia Deep',
+      'Hanami Wharf',
+      'Tulpenhaven',
+      'Kilima Coast',
+      'Neo Arcadia',
     ],
   },
 

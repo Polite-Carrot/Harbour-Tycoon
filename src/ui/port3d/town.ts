@@ -3,6 +3,7 @@ import { GROUND_Y } from './crane';
 import { COLOURS } from './palette';
 import { trees, type Trees } from './flora';
 import type { Theme } from './theme';
+import { buildCentrepiece, type CentrepieceModel } from './square';
 import { glow, hash, mat } from './util';
 
 /**
@@ -84,7 +85,6 @@ const SHIRTS = [0xff5252, 0x2f8cff, 0xffc233, 0x22c55e, 0xa855f7, 0xff8a1f, 0x14
 const TROUSERS = [0x1d3557, 0x2b2d42, 0x3f51b5, 0x6b4f3a, 0xc2b280, 0x374151, 0x1e3a8a];
 const SKIN = [0xf5d0b5, 0xe8b894, 0xc68e63, 0x8d5a3b, 0x5c3a24, 0xf1c9a5];
 const HAIR = [0x2b1d14, 0x5a3a22, 0xd9b26a, 0x1a1a1a, 0xa0522d, 0xcfcfcf];
-const AWNINGS = [0xff5252, 0x2f8cff, 0x22c55e, 0xffc233, 0xa855f7, 0xff8a1f, 0x14b8a6];
 const CARS = [0xff3b30, 0x007aff, 0xffcc00, 0x34c759, 0xffffff, 0x1c1c1e, 0xff9500, 0xaf52de, 0x5ac8fa, 0x8e8e93];
 
 // ---------------------------------------------------------------------------
@@ -444,6 +444,7 @@ export class Town {
   private readonly fountain: THREE.Points;
   private readonly fountainDrops: { a: number; v: number; u: number; p: number; tier: number }[] = [];
   private readonly fountainGlow: THREE.Sprite;
+  private centrepiece!: CentrepieceModel;
   private readonly hourHand: THREE.Object3D[] = [];
   private readonly minuteHand: THREE.Object3D[] = [];
   private readonly hallFlag: THREE.Mesh;
@@ -488,6 +489,7 @@ export class Town {
       new THREE.PointsMaterial({ map: glow(), color: 0x9fe4ff, size: 0.9, transparent: true, depthWrite: false, opacity: 1 }),
     );
     this.fountain.frustumCulled = false;
+    this.fountain.visible = this.centrepiece.spray;
     this.group.add(this.fountain);
 
     this.crowd = new Crowd(this.makePeople());
@@ -646,7 +648,7 @@ export class Town {
               doors.push({ m: trs(bx + w * 0.3, base + 1.3, face + facing * 0.04, 1.2, 2.4, 0.12), c: 0x3b2f2f });
               awnings.push({
                 m: trs(bx, base + 3.3, face + facing * 0.85, w - 1, 0.14, 1.8, 0, facing * 0.32),
-                c: AWNINGS[Math.floor(hash(n * 9.7) * AWNINGS.length)],
+                c: this.theme.square.awnings[Math.floor(hash(n * 9.7) * this.theme.square.awnings.length)],
               });
               firstFloor = 4.8;
             } else {
@@ -691,7 +693,8 @@ export class Town {
     g.add(instanced(box, mat(0xffffff, { roughness: 0.85 }), yards, false));
     g.add(instanced(box, mat(0xffffff, { roughness: 0.8 }), walls));
     g.add(instanced(roofPrism(), mat(0xffffff, { roughness: 0.6 }), gables));
-    g.add(instanced(box, mat(0xffffff, { roughness: 0.6 }), caps));
+    // Neon roof edges stay bright day and night: unlit, in their own colours.
+    g.add(instanced(box, style.neonRoofs ? new THREE.MeshBasicMaterial({ color: 0xffffff }) : mat(0xffffff, { roughness: 0.6 }), caps));
     g.add(instanced(box, mat(0xffffff, { roughness: 0.6 }), rooftop));
     g.add(instanced(box, mat(0xffffff, { roughness: 0.8 }), chimneys));
     if (domes.length) g.add(instanced(new THREE.SphereGeometry(1, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), mat(0xffffff, { roughness: 0.5 }), domes));
@@ -764,10 +767,11 @@ export class Town {
     const cx = SQUARE_CX;
     const cz = SQUARE_CZ;
     const top = G + KERB + 0.04;
-    const stone = mat(0xd9c9a8, { roughness: 0.9 });
+    const look = this.theme.square;
+    const stone = mat(look.joints, { roughness: 0.9 });
 
-    // Paving: warm stone, a darker border and a ring around the fountain.
-    const paving = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, 0.08, z1 - z0), mat(0xeadfc8, { roughness: 0.95 }));
+    // Paving in the local stone, rings around the centrepiece.
+    const paving = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, 0.08, z1 - z0), mat(look.paving, { roughness: 0.95 }));
     paving.position.set(cx, top, cz);
     paving.receiveShadow = true;
     g.add(paving);
@@ -778,29 +782,13 @@ export class Town {
     }
     // Herringbone hint: a grid of joint lines.
     const joints: Instance[] = [];
-    for (let x = x0 + 2; x < x1; x += 2) joints.push({ m: trs(x, top + 0.045, cz, 0.06, 0.01, z1 - z0), c: 0xd2c4a6 });
-    for (let z = z0 + 2; z < z1; z += 2) joints.push({ m: trs(cx, top + 0.045, z, x1 - x0, 0.01, 0.06), c: 0xd2c4a6 });
+    for (let x = x0 + 2; x < x1; x += 2) joints.push({ m: trs(x, top + 0.045, cz, 0.06, 0.01, z1 - z0), c: look.joints });
+    for (let z = z0 + 2; z < z1; z += 2) joints.push({ m: trs(cx, top + 0.045, z, x1 - x0, 0.01, 0.06), c: look.joints });
     g.add(instanced(new THREE.BoxGeometry(1, 1, 1), mat(0xffffff, { roughness: 0.95 }), joints, false));
 
-    // Fountain: a wide basin, a column, an upper bowl, and the spray.
-    const water = mat(0x3fc7e8, { roughness: 0.1, metalness: 0.1, emissive: 0x0b4d66, emissiveIntensity: 0.4 });
-    const basin = new THREE.Mesh(new THREE.CylinderGeometry(5.4, 5.6, 0.9, 32), stone);
-    basin.position.set(cx, top + 0.45, cz);
-    const pool = new THREE.Mesh(new THREE.CylinderGeometry(4.9, 4.9, 0.1, 32), water);
-    pool.position.set(cx, top + 0.78, cz);
-    const column = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.75, 3, 12), stone);
-    column.position.set(cx, top + 2, cz);
-    const bowl = new THREE.Mesh(new THREE.CylinderGeometry(2, 0.6, 0.7, 20), stone);
-    bowl.position.set(cx, top + 3.6, cz);
-    const bowlWater = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 1.8, 0.08, 20), water);
-    bowlWater.position.set(cx, top + 3.9, cz);
-    const finial = new THREE.Mesh(new THREE.SphereGeometry(0.35, 12, 8), stone);
-    finial.position.set(cx, top + 4.4, cz);
-    for (const m of [basin, pool, column, bowl, bowlWater, finial]) {
-      m.castShadow = true;
-      m.receiveShadow = true;
-      g.add(m);
-    }
+    // The centrepiece: this port's landmark (square.ts).
+    this.centrepiece = buildCentrepiece(this.theme, cx, top, cz);
+    g.add(this.centrepiece.group);
     const glowS = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow(), color: 0x6fe3ff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 }));
     glowS.scale.set(16, 16, 1);
     glowS.position.set(cx, top + 2.5, cz);
@@ -808,7 +796,7 @@ export class Town {
 
     // Flower beds ringing the fountain.
     const flowers: Instance[] = [];
-    const flowerColours = [0xff5d8f, 0xffd43b, 0xff922b, 0xb197fc, 0xffffff, 0xff6b6b];
+    const flowerColours = look.flowers;
     for (let i = 0; i < 90; i++) {
       const a = (i / 90) * Math.PI * 2;
       const r = 6.4 + hash(i) * 1.6;
@@ -842,7 +830,7 @@ export class Town {
       for (let k = 0; k < 4; k++) {
         const sx = cx + side * (x1 - x0) * 0.4;
         const sz = z0 + 6 + k * ((z1 - z0 - 12) / 3);
-        const colour = AWNINGS[(k * 2 + (side > 0 ? 1 : 0)) % AWNINGS.length];
+        const colour = look.awnings[(k * 2 + (side > 0 ? 1 : 0)) % look.awnings.length];
         stallParts.push({ m: trs(sx, top + 0.95, sz, 1.8, 0.12, 3.4), c: 0xc8a978 }); // counter
         stallParts.push({ m: trs(sx + side * 0.3, top + 0.5, sz, 1.2, 0.9, 3.2), c: 0xf8f1e4 }); // skirt
         for (const dz of [-1.6, 1.6]) for (const dx of [-0.9, 0.9]) stallParts.push({ m: trs(sx + dx, top + 1.4, sz + dz, 0.1, 2.8, 0.1), c: 0xeeeeee });
@@ -960,12 +948,13 @@ export class Town {
     const cx = (x0 + x1) / 2;
     const base = G + KERB;
     const front = z0 + 4;
-    const stone = mat(0xfaf3e3, { roughness: 0.7 });
-    const trim = mat(0xe6d5b0, { roughness: 0.7 });
-    const roofMat = mat(0x2f8f83, { roughness: 0.5, metalness: 0.2 });
+    const hall = this.theme.square.hall;
+    const stone = mat(hall.wall, { roughness: 0.7 });
+    const trim = mat(hall.trim, { roughness: 0.7 });
+    const roofMat = mat(hall.roof, { roughness: 0.5, metalness: 0.2 });
 
     // Forecourt lawn and the hall itself.
-    const lawn = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, 0.05, z1 - z0), mat(0x8fd16f));
+    const lawn = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, 0.05, z1 - z0), mat(hall.lawn));
     lawn.position.set(cx, base + 0.03, (z0 + z1) / 2);
     lawn.receiveShadow = true;
     g.add(lawn);
@@ -1240,6 +1229,7 @@ export class Town {
     (this.lampGlow.material as THREE.PointsMaterial).opacity = lamps;
     (this.fairyLights.material as THREE.PointsMaterial).opacity = lamps;
     this.fountainGlow.material.opacity = lamps * 0.5;
+    this.centrepiece.animate(t, lamps);
     if (this.clockFace) this.clockFace.emissiveIntensity = lamps * 0.8;
 
     // Fountain spray.
