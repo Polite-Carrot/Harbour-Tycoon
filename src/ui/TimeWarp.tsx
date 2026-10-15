@@ -1,31 +1,59 @@
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { BALANCE } from '../config/balance';
 import { formatDuration, formatMoney } from '../sim/format';
 import { warpReward, warpStatus } from '../sim/timewarp';
 import type { GameState } from '../sim/types';
 import { theme } from './theme';
 
+/** Below this width the pill goes compact, so it never reaches the money counter. */
+const COMPACT_WIDTH = 640;
+/** The money counter is centred and up to ~180 wide: the pill stops short of it. */
+const MONEY_CLEARANCE = 100;
+
 /** The pill in the corner of the harbour: what a warp is worth, or when the next one is. */
 export function TimeWarpButton({ state, day, now, onPress }: { state: GameState; day: number; now: number; onPress: () => void }) {
   const status = warpStatus(state, day, now);
-  const label = status.ready
-    ? `Skip 24h · +${formatMoney(warpReward(state))}`
-    : status.reason === 'cooldown'
-      ? `Next warp in ${formatDuration(status.waitSeconds)}`
-      : 'Back tomorrow';
+  const { width } = useWindowDimensions();
+  const compact = width < COMPACT_WIDTH;
+  const label = warpLabel(status, formatMoney(warpReward(state)), compact);
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [styles.pill, !status.ready && styles.pillOff, pressed && styles.pressed]}
+      style={({ pressed }) => [
+        styles.pill,
+        compact && [styles.pillCompact, { maxWidth: width / 2 - MONEY_CLEARANCE }],
+        !status.ready && styles.pillOff,
+        pressed && styles.pressed,
+      ]}
       accessibilityRole="button"
       accessibilityLabel="Time Warp"
+      accessibilityHint={warpLabel(status, formatMoney(warpReward(state)), false)}
     >
       <Text style={[styles.pillIcon, !status.ready && styles.pillTextOff]}>⏩</Text>
-      <Text style={[styles.pillText, !status.ready && styles.pillTextOff]} numberOfLines={1}>
-        {label}
-      </Text>
+      {label !== '' && (
+        <Text style={[styles.pillText, !status.ready && styles.pillTextOff]} numberOfLines={1}>
+          {label}
+        </Text>
+      )}
     </Pressable>
   );
+}
+
+/**
+ * Pill text. On a phone there are only ~80px beside the money counter, so
+ * compact keeps it to a few characters; tapping opens the full details.
+ */
+export function warpLabel(status: ReturnType<typeof warpStatus>, reward: string, compact: boolean): string {
+  if (status.ready) return compact ? '24h' : `Skip 24h · +${reward}`;
+  if (status.reason === 'cooldown') return compact ? shortWait(status.waitSeconds) : `Next warp in ${formatDuration(status.waitSeconds)}`;
+  return compact ? '' : 'Back tomorrow';
+}
+
+/** Just the biggest unit, rounded up: "2h", "15m", "40s". */
+function shortWait(seconds: number): string {
+  if (seconds >= 3600) return `${Math.ceil(seconds / 3600)}h`;
+  if (seconds >= 60) return `${Math.ceil(seconds / 60)}m`;
+  return `${Math.max(1, Math.ceil(seconds))}s`;
 }
 
 interface ModalProps {
@@ -122,6 +150,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 11,
     paddingVertical: 6,
   },
+  pillCompact: { gap: 4, paddingHorizontal: 8 },
   pillOff: { backgroundColor: 'rgba(255,255,255,0.9)', borderColor: theme.scrimEdge, borderWidth: 1 },
   pillIcon: { fontSize: 14, color: '#ffffff' },
   pillText: { color: '#ffffff', fontSize: 12, fontWeight: '900', flexShrink: 1 },
