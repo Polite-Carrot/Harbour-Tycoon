@@ -47,7 +47,12 @@ On the web the port is a full 3D scene (three.js) you can explore:
 **Ship handling.** Ships come in parallel to the quay and stop off the berth;
 tugs (always one, a pair from Tugboats level 4) meet them, push them
 sideways onto the berth, stand by during unloading, haul them off on towlines
-and cruise back to meet the next ship. The economy's cargo cycle runs far
+and cruise back to meet the next ship. While she is alongside, each gantry crane
+stands over its own bay and works it like a real one: it lifts the top
+boxes off onto a stack on the quay under its legs, then loads the last
+ship's boxes back into the gaps, so every box is always somewhere and each
+ship leaves full (`src/ui/port3d/cargo.ts`). Faster cranes move more boxes
+per ship. The economy's cargo cycle runs far
 faster than any real berthing could, so the 3D berth runs its own steady
 routine (`src/ui/port3d/berthing.ts`) while the money, the HUD and the "+$"
 pops still follow the simulation exactly.
