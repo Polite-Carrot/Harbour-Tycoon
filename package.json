@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "balance": "tsx scripts/balance-report.ts",
-    "build:web": "expo export --platform web --output-dir dist"
+    "build:web": "expo export --platform web --output-dir dist",
+    "models:export": "tsx scripts/export-models.ts"
   },
   "dependencies": {
     "@expo/metro-runtime": "~57.0.13",
@@ -27,6 +28,7 @@
     "three": "^0.186.1"
   },
   "devDependencies": {
+    "@types/node": "^26.6.5",
     "@types/react": "~19.2.2",
     "@types/three": "^0.186.0",
     "tsx": "^4.20.6",

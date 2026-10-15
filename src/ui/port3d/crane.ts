@@ -1,127 +1,119 @@
 import * as THREE from 'three';
-import { CONTAINERS } from './palette';
-import { containerMesh } from './containers';
-import { BOX_HEIGHT, BOX_LENGTH, BOX_WIDTH } from './ship';
-import { box, glowSprite, lerp, mat, smoothstep, strut } from './util';
+import { PILE_ROWS, PILE_TIERS, pileZ, type CraneWork, type Spot } from './cargo';
+import { containerGeometry, containerMaterial } from './containers';
+import { CRANE, buildCrane } from './models/quay';
+import { BOX_HEIGHT } from './ship';
+import { glowSprite, lerp } from './util';
 
 /** Quay top surface. */
 export const GROUND_Y = 2;
-const BOOM_Y = 34;
-/** Where the trolley drops boxes on the apron, between the landside legs. */
-const QUAY_DROP_Z = 10;
+/** Underside of the boom, where the trolley runs, in world y. */
+const TROLLEY_Y = GROUND_Y + CRANE.trolleyY;
+/** Spreader underside when hoisted clear: a carried box clears a full stack. */
+export const HOIST_TOP = TROLLEY_Y - 3.5;
+/** Where the trolley waits between ships, over the quay stack. */
+export const PARK_Z = 11;
+
+/** Where a spot is: trolley z, and the height the spreader's underside sits at to grip or set down a box there. */
+export type SpotResolver = (spot: Spot) => { z: number; y: number };
+
+/** The quay stack's spots, crane-local. Ships' spots need the ship, so the world resolves those. */
+export function pileSpot(row: number, tier: number, scale: number) {
+  return { z: pileZ(row), y: GROUND_Y + BOX_HEIGHT * scale * (tier + 1) };
+}
+
+const HIDDEN = new THREE.Matrix4().makeScale(0, 0, 0);
 
 /**
- * A ship-to-shore gantry crane. Local origin is on the quay edge; the boom
- * reaches out over the water toward -z.
+ * A ship-to-shore gantry crane (models/quay.ts) standing on the quay. Local
+ * origin is on the quay edge; the boom reaches out over the water toward -z.
+ * The trolley slides along the boom and lowers the spreader on its ropes;
+ * cargo.ts says where, and which box it is carrying. Boxes it sets down on
+ * the quay stack under its legs.
  */
 export class Crane {
   readonly group = new THREE.Group();
-  private readonly trolley: THREE.Group;
-  private readonly cable: THREE.Mesh;
-  private readonly spreader: THREE.Group;
+  private readonly trolley: THREE.Object3D;
+  private readonly ropes: THREE.Object3D;
+  private readonly spreader: THREE.Object3D;
   private readonly carried: THREE.Mesh;
+  private readonly pile: THREE.InstancedMesh;
+  private pileState = '';
   private readonly lamp: THREE.Sprite;
+  private readonly m = new THREE.Matrix4();
+  private readonly c = new THREE.Color();
 
-  constructor(colour: number, seed: number) {
+  constructor(colour: number) {
     const g = this.group;
-    const paint = mat(colour, { roughness: 0.55 });
-    const white = mat(0xffffff, { roughness: 0.6 });
-    const steel = mat(0x3b4452);
-
-    // Four legs on rails, sill beams, and the portal frame on top.
-    for (const x of [-6, 6]) {
-      for (const z of [3, 19]) {
-        g.add(box(1.4, BOOM_Y - GROUND_Y, 1.4, paint, x, (BOOM_Y + GROUND_Y) / 2 - 1, z));
-        g.add(box(2.6, 1.4, 3, steel, x, GROUND_Y + 0.7, z)); // bogies
-      }
-      g.add(box(1.4, 1.6, 17.4, paint, x, BOOM_Y - 2.4, 11));
-      g.add(box(1, 1, 17.4, paint, x, 12, 11));
-    }
-    for (const z of [3, 19]) g.add(box(13.4, 1.6, 1.4, paint, 0, BOOM_Y - 2.4, z));
-
-    // Boom girders: out over the ship and back over the apron.
-    const boomLen = 66;
-    const boomMid = -8;
-    for (const x of [-2.4, 2.4]) g.add(box(1, 2.2, boomLen, paint, x, BOOM_Y + 0.4, boomMid));
-    for (let i = 0; i < 9; i++) g.add(box(5.8, 0.5, 0.5, paint, 0, BOOM_Y + 1.4, boomMid - boomLen / 2 + 3 + i * 7.5));
-
-    // A-frame apex and the stays down to the boom tip and tail.
-    const apex = new THREE.Vector3(0, BOOM_Y + 16, 15);
-    g.add(strut(new THREE.Vector3(-6, BOOM_Y, 15), apex, 0.6, paint));
-    g.add(strut(new THREE.Vector3(6, BOOM_Y, 15), apex, 0.6, paint));
-    g.add(strut(apex, new THREE.Vector3(-2.4, BOOM_Y + 1.4, boomMid - boomLen / 2 + 1), 0.25, white));
-    g.add(strut(apex, new THREE.Vector3(2.4, BOOM_Y + 1.4, boomMid - boomLen / 2 + 1), 0.25, white));
-    g.add(strut(apex, new THREE.Vector3(0, BOOM_Y + 1.4, boomMid + boomLen / 2 - 1), 0.3, white));
-
-    // Machinery house on the backreach, operator cab hanging under the boom.
-    g.add(box(9, 4.5, 8, white, 0, BOOM_Y + 3.6, 20));
-    g.add(box(9.2, 0.6, 8.2, paint, 0, BOOM_Y + 6.1, 20));
+    const model = buildCrane({ paint: colour });
+    model.position.y = GROUND_Y;
+    g.add(model);
+    this.trolley = model.getObjectByName('Trolley')!;
+    this.ropes = model.getObjectByName('HoistRopes')!;
+    this.spreader = model.getObjectByName('Spreader')!;
 
     this.lamp = glowSprite(0xffe7a8, 10);
-    this.lamp.position.copy(apex).add(new THREE.Vector3(0, 1.5, 0));
+    this.lamp.position.copy(CRANE.apex).add(new THREE.Vector3(0, GROUND_Y + 1.5, 0));
     g.add(this.lamp);
 
-    // Trolley, hoist cable, spreader and the box it carries.
-    this.trolley = new THREE.Group();
-    this.trolley.add(box(3.6, 1.8, 4.5, white, 0, BOOM_Y + 0.4, 0));
-    g.add(this.trolley);
-
-    this.cable = new THREE.Mesh(new THREE.BoxGeometry(0.25, 1, 0.25), steel);
-    this.cable.geometry.translate(0, -0.5, 0);
-    this.trolley.add(this.cable);
-
-    this.spreader = new THREE.Group();
-    this.spreader.add(box(BOX_LENGTH + 0.4, 0.6, BOX_WIDTH + 0.2, mat(0xffc233), 0, 0.3, 0));
-    this.carried = containerMesh(CONTAINERS[seed % CONTAINERS.length]);
-    this.carried.position.y = -BOX_HEIGHT / 2 + 0.05;
+    // The box on the spreader hangs from the twistlocks.
+    this.carried = new THREE.Mesh(containerGeometry(), containerMaterial());
+    this.carried.castShadow = true;
+    this.carried.visible = false;
     this.spreader.add(this.carried);
-    this.trolley.add(this.spreader);
+
+    this.pile = new THREE.InstancedMesh(containerGeometry(), containerMaterial(), PILE_ROWS * PILE_TIERS);
+    this.pile.castShadow = true;
+    this.pile.receiveShadow = true;
+    g.add(this.pile);
   }
 
   /**
-   * @param cycle   free-running counter; one integer step is one box moved
-   * @param active  false while the berth is empty — the crane parks
-   * @param shipZ   centreline of the moored ship, in crane-local z
-   * @param pickY   top of the cargo stack, world y
+   * @param work   what cargo.ts says the crane is doing
+   * @param at     where spots are (ship slots move with the ship)
+   * @param scale  ship scale: the boxes are the ship's, so they share it
    */
-  update(cycle: number, active: boolean, shipZ: number, pickY: number, lamps: number) {
+  update(work: CraneWork, at: SpotResolver, scale: number, lamps: number) {
     this.lamp.material.opacity = lamps;
     this.lamp.visible = lamps > 0.02;
 
-    const top = BOOM_Y - 4;
-    let z = QUAY_DROP_Z;
-    let y = top;
-    let loaded = false;
-
-    if (active) {
-      const c = cycle - Math.floor(cycle);
-      const dropY = GROUND_Y + BOX_HEIGHT + 1.2;
-      const pick = pickY + 0.1;
-      if (c < 0.14) {
-        z = shipZ;
-        y = lerp(top, pick, smoothstep(0, 0.14, c));
-      } else if (c < 0.28) {
-        z = shipZ;
-        y = lerp(pick, top, smoothstep(0.14, 0.28, c));
-        loaded = true;
-      } else if (c < 0.48) {
-        z = lerp(shipZ, QUAY_DROP_Z, smoothstep(0.28, 0.48, c));
-        loaded = true;
-      } else if (c < 0.6) {
-        y = lerp(top, dropY, smoothstep(0.48, 0.6, c));
-        loaded = true;
-      } else if (c < 0.72) {
-        y = lerp(dropY, top, smoothstep(0.6, 0.72, c));
-      } else {
-        z = lerp(QUAY_DROP_Z, shipZ, smoothstep(0.72, 1, c));
-      }
-    }
+    const z = lerp(at(work.za).z, at(work.zb).z, work.kz);
+    const ya = work.ya === 'top' ? HOIST_TOP : at(work.ya).y;
+    const yb = work.yb === 'top' ? HOIST_TOP : at(work.yb).y;
+    const under = lerp(ya, yb, work.ky);
 
     this.trolley.position.z = z;
-    this.spreader.position.y = y;
-    this.carried.visible = loaded;
-    const cableTop = BOOM_Y - 0.5;
-    this.cable.position.y = cableTop;
-    this.cable.scale.y = Math.max(0.1, cableTop - y);
+    // Spreader pivot (headblock top) relative to the trolley.
+    const drop = under + CRANE.spreaderUnder - TROLLEY_Y;
+    this.spreader.position.y = drop;
+    // The ropes hang from ropeTop down to the headblock (0.6 above the pivot).
+    this.ropes.scale.y = Math.max(0.02, (CRANE.ropeTop - (drop + 0.6)) / CRANE.ropeLength);
+
+    this.carried.visible = work.carrying !== null;
+    if (work.carrying !== null) {
+      (this.carried.material as THREE.MeshStandardMaterial).color.setHex(work.carrying);
+      this.carried.scale.setScalar(scale);
+      this.carried.position.y = -CRANE.spreaderUnder - (BOX_HEIGHT * scale) / 2;
+    }
+
+    this.setPile(work, scale);
+  }
+
+  private setPile(work: CraneWork, scale: number) {
+    const state = `${scale}|` + work.pile.map((b) => `${b.row}.${b.tier}.${b.colour}`).join(',');
+    if (state === this.pileState) return;
+    this.pileState = state;
+    const s = new THREE.Vector3(scale, scale, scale);
+    const q = new THREE.Quaternion();
+    const p = new THREE.Vector3();
+    for (let i = 0; i < PILE_ROWS * PILE_TIERS; i++) this.pile.setMatrixAt(i, HIDDEN);
+    work.pile.forEach((b) => {
+      const i = b.row * PILE_TIERS + b.tier;
+      p.set(0, GROUND_Y + BOX_HEIGHT * scale * (b.tier + 0.5), pileZ(b.row));
+      this.pile.setMatrixAt(i, this.m.compose(p, q, s));
+      this.pile.setColorAt(i, this.c.setHex(b.colour));
+    });
+    this.pile.instanceMatrix.needsUpdate = true;
+    if (this.pile.instanceColor) this.pile.instanceColor.needsUpdate = true;
   }
 }

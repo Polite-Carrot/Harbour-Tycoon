@@ -3,7 +3,7 @@ import { vipWindow } from '../../sim/daily';
 import { containerGeometry, containerMaterial } from './containers';
 import { GROUND_Y } from './crane';
 import { CONTAINERS } from './palette';
-import { deckGeometry, hullGeometry, hullMaterial, type HullSpec } from './ship';
+import { LINER_SUN_DECK, buildLiner, buildTallShip, linerHalfBreadth } from './models/ships';
 import { Batch, glowSprite, mat, smoothstep, textTexture } from './util';
 
 /**
@@ -268,22 +268,7 @@ export class Dredger {
 // ---------------------------------------------------------------------------
 
 const LINER_X = 128;
-
-const LINER_HULL: HullSpec = {
-  length: 80,
-  beam: 13,
-  deck: 7,
-  sheer: 1.6,
-  sheerFrom: 26,
-  keel: -3.2,
-  bowFrom: 20,
-  sternFrom: -30,
-  transom: 0.8,
-  sternLift: 1.6,
-  bowLift: 0,
-  fullness: 5,
-  bowFullness: 2.2,
-};
+const LINER_BEAM = 13;
 
 export class CruiseTerminal {
   readonly group = new THREE.Group();
@@ -326,51 +311,25 @@ export class CruiseTerminal {
       g.add(flag);
     }
 
-    // The liner: a white hull, deck upon deck of cabins, a pool and funnels.
-    const hull = new THREE.Mesh(
-      hullGeometry(LINER_HULL, 48, 17),
-      hullMaterial({ bottom: 0xb91c1c, bootTop: 0x0b3d6b, topsides: 0xffffff, stripe: 0x2f8cff, waterline: 0.3, bootBand: 1.2, stripeFrom: 6.2 }),
-    );
-    hull.castShadow = true;
-    this.liner.add(hull);
-    this.liner.add(new THREE.Mesh(deckGeometry(LINER_HULL), mat(0xd9b98a, { roughness: 0.8 })));
-    const lb = new Batch();
-    const blue = mat(0x2f8cff, { roughness: 0.4 });
-    for (let k = 0; k < 6; k++) {
-      const len = 66 - k * 6;
-      const wide = 12.2 - (k > 3 ? 1.5 : 0);
-      const y = 7 + k * 2.4;
-      lb.box(len, 2.4, wide, k % 2 ? white : mat(0xf3f6fa), -4 - k * 0.5, y + 1.2, 0);
-      // Balcony windows down both sides.
-      lb.box(len - 2, 0.9, wide + 0.06, windowMat, -4 - k * 0.5, y + 1.4, 0);
-    }
-    lb.box(30, 0.4, 11, white, -10, 21.6, 0); // sun deck
-    lb.box(10, 0.3, 5, mat(0x38bdf8, { roughness: 0.1, emissive: 0x0e7490, emissiveIntensity: 0.2 }), -8, 21.9, 0); // pool
-    for (const x of [-20, -16]) {
-      lb.add(new THREE.CylinderGeometry(1.6, 2, 6, 14), blue, x, 25, 0, 0, 0, 0, 1, 1, 1.4);
-      lb.add(new THREE.CylinderGeometry(1.65, 1.65, 0.8, 14), mat(0xffc233), x, 27.6, 0, 0, 0, 0, 1, 1, 1.4);
-    }
-    // Lifeboats along both sides.
-    for (const side of [-1, 1]) {
-      for (let i = 0; i < 6; i++) lb.add(new THREE.CapsuleGeometry(0.8, 3, 4, 8), mat(0xff6a13), -26 + i * 7, 10.8, side * 6.9, 0, 0, Math.PI / 2, 1, 1, 0.85);
-    }
-    // Bridge front.
-    lb.box(3, 3, 13.5, white, 26, 17.5, 0);
-    lb.box(3.05, 1.2, 13.55, windowMat, 26, 18, 0);
-    this.liner.add(lb.build());
+    // The liner (models/ships.ts): her cabins light up with the town at night.
+    this.liner.add(buildLiner({ windows: windowMat }));
     const name = textTexture('OCEAN STAR', '#0b3d6b');
     if (name) {
+      const x = 30;
+      const y = 5;
+      const flare = Math.atan2(linerHalfBreadth(x + 0.5, y) - linerHalfBreadth(x, y), 0.5);
       for (const side of [-1, 1]) {
         const plate = new THREE.Mesh(new THREE.PlaneGeometry(10, 1.8), new THREE.MeshBasicMaterial({ map: name, transparent: true }));
-        plate.position.set(30, 5, side * 5.6);
-        plate.rotation.y = side > 0 ? -0.18 : Math.PI + 0.18;
+        plate.position.set(x, y, side * (linerHalfBreadth(x, y) + 0.06));
+        plate.rotation.y = side > 0 ? -flare : Math.PI + flare;
         this.liner.add(plate);
       }
     }
-    // Strings of deck lights for the evening.
-    for (let i = 0; i < 18; i++) {
+    // A string of deck lights over the sun deck for the evening.
+    const deck = LINER_SUN_DECK;
+    for (let i = 0; i < 12; i++) {
       const sp = glowSprite(0xfff0b0, 2.4);
-      sp.position.set(-34 + i * 4, 22.4 + Math.sin(i * 0.9) * 0.3, 0);
+      sp.position.set(deck.from + 1 + (i * (deck.to - deck.from - 2)) / 11, deck.y + 1.2 + Math.sin(i * 0.9) * 0.3, 0);
       this.lights.push(sp);
       this.liner.add(sp);
     }
@@ -382,7 +341,7 @@ export class CruiseTerminal {
     if (!level) return;
     // A bigger liner calls as the terminal grows.
     const scale = 0.8 + Math.min(12, level) * 0.025;
-    const z = -(LINER_HULL.beam / 2) * scale - 2.4;
+    const z = -(LINER_BEAM / 2) * scale - 2.4;
     this.liner.scale.setScalar(scale);
     this.liner.position.set(LINER_X, heightAt(LINER_X, z) * 0.3 + Math.sin(t * 0.5) * 0.08, z);
     this.liner.rotation.set(Math.sin(t * 0.4) * 0.004, 0, Math.sin(t * 0.33) * 0.004);
@@ -398,93 +357,24 @@ export class CruiseTerminal {
 // VIP tall ship
 // ---------------------------------------------------------------------------
 
-const TALL_HULL: HullSpec = {
-  length: 34,
-  beam: 8,
-  deck: 3.2,
-  sheer: 1.4,
-  sheerFrom: 2,
-  keel: -2.6,
-  bowFrom: 6,
-  sternFrom: -11,
-  transom: 0.8,
-  sternLift: 0.8,
-  bowLift: 1.2,
-  fullness: 3,
-  bowFullness: 2,
-};
-
 const VIP_LANE_Z = -54;
 const VIP_FROM = -440;
 const VIP_TO = 440;
 
-/** A three-masted tall ship, sailing through the bay while a VIP visit lasts. */
+/** A three-masted tall ship (models/ships.ts), sailing through the bay while a VIP visit lasts. */
 export class TallShip {
   readonly group = new THREE.Group();
-  private readonly sails: THREE.Mesh[] = [];
+  private readonly sails: THREE.Object3D[] = [];
 
   constructor() {
     const g = this.group;
     g.visible = false;
-    const hull = new THREE.Mesh(
-      hullGeometry(TALL_HULL, 32, 15),
-      hullMaterial({ bottom: 0x7c2d12, bootTop: 0x1f2937, topsides: 0x1f2937, stripe: 0xd4a017, waterline: 0.2, bootBand: 0.4, stripeFrom: 2.5 }),
-    );
-    hull.castShadow = true;
-    g.add(hull);
-    g.add(new THREE.Mesh(deckGeometry(TALL_HULL), mat(0xc69c6d, { roughness: 0.8 })));
-    const b = new Batch();
-    const wood = mat(0x7c4a21, { roughness: 0.7 });
-    const rope = mat(0x3b2f2f);
-    const masts = [-9, 0, 9];
-    const heights = [20, 25, 21];
-    masts.forEach((x, i) => {
-      b.rod(new THREE.Vector3(x, 3, 0), new THREE.Vector3(x, 3 + heights[i], 0), 0.32, wood, 8);
-      for (let y = 0; y < 3; y++) {
-        const yy = 7 + y * 5.6;
-        b.rod(new THREE.Vector3(x, yy, -5 + y * 0.8), new THREE.Vector3(x, yy, 5 - y * 0.8), 0.14, wood, 5);
-      }
-      b.rod(new THREE.Vector3(x, 3 + heights[i], 0), new THREE.Vector3(x - 8, 3.4, 0), 0.04, rope, 3);
-      b.rod(new THREE.Vector3(x, 3 + heights[i], 0), new THREE.Vector3(x + 8, 3.6, 0), 0.04, rope, 3);
+    const model = buildTallShip();
+    g.add(model);
+    // Square sails are their own meshes, bellied along local x.
+    model.traverse((o) => {
+      if (/^Sail\d/.test(o.name)) this.sails.push(o);
     });
-    b.rod(new THREE.Vector3(16, 4.5, 0), new THREE.Vector3(26, 8, 0), 0.25, wood, 6); // bowsprit
-    b.box(5, 1.6, 6, mat(0x7c4a21), -13, 4.4, 0); // quarterdeck house
-    g.add(b.build());
-
-    // Square sails, billowing forward, three per mast; jibs at the bow.
-    const sailMat = new THREE.MeshStandardMaterial({ color: 0xfff8e7, roughness: 0.8, side: THREE.DoubleSide });
-    masts.forEach((x, i) => {
-      for (let y = 0; y < 3; y++) {
-        const w = 9.6 - y * 1.6;
-        const h = 5;
-        const geo = new THREE.PlaneGeometry(w, h, 6, 3);
-        const pos = geo.attributes.position as THREE.BufferAttribute;
-        for (let v = 0; v < pos.count; v++) {
-          const px = pos.getX(v) / (w / 2);
-          const py = pos.getY(v) / (h / 2);
-          pos.setZ(v, (1 - px * px) * (1 - py * py * 0.4) * 1.2);
-        }
-        geo.computeVertexNormals();
-        const sail = new THREE.Mesh(geo, sailMat);
-        // Face forward, so the belly fills toward the bow with the wind astern.
-        sail.rotation.y = Math.PI / 2;
-        sail.position.set(x + 0.4, 4.6 + y * 5.6, 0);
-        sail.castShadow = true;
-        this.sails.push(sail);
-        g.add(sail);
-      }
-      const pennant = new THREE.Mesh(new THREE.PlaneGeometry(3, 0.5).translate(-1.5, 0, 0), mat(0xd62828, { side: THREE.DoubleSide }));
-      pennant.position.set(x, 3.4 + heights[i], 0);
-      g.add(pennant);
-    });
-    const jibShape = new THREE.Shape();
-    jibShape.moveTo(0, 0);
-    jibShape.lineTo(-8, 0);
-    jibShape.lineTo(-0.5, 14);
-    jibShape.closePath();
-    const jib = new THREE.Mesh(new THREE.ShapeGeometry(jibShape), sailMat);
-    jib.position.set(23, 6.5, 0);
-    g.add(jib);
   }
 
   /** Sails the VIP lane while a visit is on, otherwise stays out of sight. */
@@ -497,7 +387,7 @@ export class TallShip {
     const x = VIP_FROM + (VIP_TO - VIP_FROM) * p;
     this.group.position.set(x, heightAt(x, VIP_LANE_Z) * 0.6, VIP_LANE_Z);
     this.group.rotation.set(Math.sin(t * 0.8) * 0.03, 0, -0.05 + Math.sin(t * 0.6) * 0.02);
-    this.sails.forEach((s, i) => (s.scale.z = 1 + Math.sin(t * 1.4 + i) * 0.08));
+    this.sails.forEach((s, i) => (s.scale.x = 1 + Math.sin(t * 1.4 + i) * 0.08));
   }
 
   /** Where she is, for the camera. */

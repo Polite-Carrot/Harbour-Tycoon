@@ -67,8 +67,11 @@ describe('3D harbour', () => {
       const port = portAt(2, level);
       const stats = derivePortStats(port, 0);
       world.update({ port, portIndex: 0, stats, lastTickAt: 0 }, 0, 1 / 60, camera);
-      const cranes = world.scene.children.find((o) => o.type === 'Group' && o.children.length === craneCount(level) && o.children.every((c) => c.children.length > 30));
-      expect(cranes).toBeDefined();
+      let cranes = 0;
+      world.scene.traverse((o) => {
+        if (o.name === 'GantryCrane') cranes++;
+      });
+      expect(cranes).toBe(craneCount(level));
     }
     world.dispose();
   });
@@ -84,6 +87,44 @@ describe('3D harbour', () => {
     }
     const finite = (o: THREE.Object3D) => [o.position.x, o.position.y, o.position.z].every(Number.isFinite);
     world.scene.traverse((o) => expect(finite(o)).toBe(true));
+    world.dispose();
+  });
+
+  it('rebuilding the ships for a new port leaves the shared window material alone', () => {
+    const world = new HarbourWorld();
+    const windows = (world as unknown as { land: { windowMat: THREE.Material } }).land.windowMat;
+    let disposed = false;
+    windows.addEventListener('dispose', () => (disposed = true));
+    for (const portIndex of [0, 1, 2]) {
+      const port = portAt(2, 5);
+      world.update({ port, portIndex, stats: derivePortStats(port, portIndex), lastTickAt: 0 }, 0, 1 / 60, camera);
+    }
+    expect(disposed).toBe(false);
+    world.dispose();
+  });
+
+  it('the crane spreader comes down onto the cargo of the moored ship', () => {
+    const world = new HarbourWorld();
+    const port = portAt(2, 8);
+    const stats = derivePortStats(port, 0);
+    // Step through a moored stretch; the lowest the spreader's twistlocks
+    // get must be on top of the stack, never down inside the boxes.
+    let lowest = Infinity;
+    let cargoTop = 0;
+    const tmp = new THREE.Vector3();
+    for (let i = 0; i < 400; i++) {
+      world.update({ port, portIndex: 0, stats, lastTickAt: 0 }, (1000 * CYCLE + 18 + i * 0.05) * 1000, 1 / 20, camera);
+      const moored = world.visibleShips().find((g) => Math.abs(g.position.x) < 0.5);
+      if (!moored) continue;
+      world.scene.traverse((o) => {
+        // Only over the water: on the quay side it sets boxes down on the apron.
+        if (o.name === 'Spreader' && o.getWorldPosition(tmp).z < 0) lowest = Math.min(lowest, tmp.y - 1.15);
+      });
+      cargoTop = Math.max(cargoTop, moored.position.y);
+    }
+    expect(Number.isFinite(lowest)).toBe(true);
+    // Twistlocks stop at or above the hatch covers (y 6.2 above the waterline, scaled).
+    expect(lowest).toBeGreaterThan(cargoTop + 6);
     world.dispose();
   });
 

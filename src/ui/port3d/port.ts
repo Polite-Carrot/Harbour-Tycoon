@@ -4,6 +4,9 @@ import { GROUND_Y } from './crane';
 import { containerGeometry, containerMaterial, containerMesh } from './containers';
 import { buildSailboat } from './ship';
 import { Town } from './town';
+import { trees } from './flora';
+import type { Theme } from './theme';
+import { RTGS, RTG_BOXES, STACK_PITCH, isRtgStack, rtgWork, yardX, yardZ } from './yard';
 import { box, gableRoof, glowSprite, hash, mat, strut } from './util';
 
 /** Floodlight masts, centre-out, so the first few light the berth. */
@@ -47,6 +50,20 @@ const trs = (x: number, y: number, z: number, sx: number, sy: number, sz: number
   );
 
 /**
+ * Channel buoys marking the ships' lane in and out: red on the quay side,
+ * green to seaward (clear of the VIP tall ship's lane further out), and the
+ * east pair beyond the cruise liner's berth.
+ */
+export const BUOYS = [
+  { x: -140, z: -15, colour: 0xff3b3b },
+  { x: -260, z: -16, colour: 0xff3b3b },
+  { x: -140, z: -64, colour: 0x22c55e },
+  { x: -260, z: -66, colour: 0x22c55e },
+  { x: 205, z: -15, colour: 0xff3b3b },
+  { x: 205, z: -66, colour: 0x22c55e },
+] as const;
+
+/**
  * Everything on land plus the fixed things in the water: quay, container
  * yard, sheds, the town, hills, breakwater and lighthouse. Upgrade-driven
  * pieces (floodlights, customs house, yard fill) are built once and toggled.
@@ -71,12 +88,27 @@ export class PortLand {
   private town!: Town;
   private readonly buoys: { g: THREE.Group; x: number; z: number; light: THREE.Sprite; phase: number }[] = [];
   private readonly trucks: THREE.Group[] = [];
-  private readonly rtgs: THREE.Group[] = [];
+  private readonly rtgs: {
+    g: THREE.Group;
+    trolley: THREE.Group;
+    rope: THREE.Mesh;
+    spreader: THREE.Group;
+    carried: THREE.Mesh;
+    boxes: THREE.InstancedMesh;
+    state: string;
+  }[] = [];
   private readonly boats: { g: THREE.Group; cx: number; cz: number; rx: number; rz: number; speed: number; phase: number }[] = [];
   private readonly gulls: { g: THREE.Group; wl: THREE.Group; wr: THREE.Group; r: number; h: number; speed: number; phase: number; cx: number; cz: number }[] = [];
 
-  constructor() {
-    this.windowMat = mat(0x34507a, { emissive: 0xffc966, emissiveIntensity: 0, roughness: 0.3 });
+  readonly theme: Theme;
+
+  /**
+   * @param theme     the port's setting (theme.ts)
+   * @param windowMat shared with the ships, so it outlives a rebuilt land
+   */
+  constructor(theme: Theme, windowMat: THREE.MeshStandardMaterial) {
+    this.theme = theme;
+    this.windowMat = windowMat;
     this.buildGround();
     this.buildQuayEdge();
     const { mesh, total } = this.buildYard();
@@ -110,8 +142,8 @@ export class PortLand {
   private buildGround() {
     const g = this.group;
     const concrete = mat(COLOURS.concrete, { roughness: 0.9 });
-    const grass = mat(COLOURS.grass, { roughness: 0.95 });
-    const sand = mat(COLOURS.sand, { roughness: 1 });
+    const grass = mat(this.theme.ground.grass, { roughness: 0.95 });
+    const sand = mat(this.theme.ground.sand, { roughness: 1 });
 
     // The quay itself: a concrete pier out to z = 0.
     const quay = box(340, 12, 104, concrete, 0, GROUND_Y - 6, 52);
@@ -185,10 +217,11 @@ export class PortLand {
     const items: (Instance & { k: number })[] = [];
     for (let col = 0; col < 39; col++) {
       if (col % 7 === 6) continue; // lanes
-      const x = -122 + col * 6.4;
+      const x = yardX(col);
       for (let row = 0; row < 14; row++) {
         if (row % 5 === 4) continue;
-        const z = 32 + row * 3.2;
+        if (isRtgStack(col, row)) continue; // the gantries' own stacks (yard.ts)
+        const z = yardZ(row);
         const seed = col * 31 + row * 7;
         const k = hash(seed);
         const height = 1 + Math.floor(hash(seed + 5) * 4);
@@ -226,18 +259,17 @@ export class PortLand {
   /** Coastal trees and lamps either side of the port. The town itself
    *  (streets, square, people, traffic) lives in town.ts. */
   private buildTown() {
-    const trunks: Instance[] = [];
-    const canopies: Instance[] = [];
+    const t = this.theme.trees;
+    const wild = trees(t.wild, t.leaves, t.trunk);
     for (let x = -400; x <= 400; x += 14) {
       if (Math.abs(x) < 175) continue;
       // Clear of the rail link, which runs along z = 62 on the east side.
       const z = 50 + hash(x + 1) * 40;
       if (x > 0 && Math.abs(z - 62) < 6) continue;
-      this.tree(trunks, canopies, x + hash(x) * 5, z, x + 500);
+      wild.plant(x + hash(x) * 5, GROUND_Y, z, x + 500, 1.25);
     }
     const g = this.group;
-    g.add(instanced(new THREE.CylinderGeometry(0.4, 0.55, 1, 6), mat(COLOURS.trunk), trunks));
-    g.add(instanced(new THREE.IcosahedronGeometry(1, 0), mat(0xffffff, { flatShading: true, roughness: 0.8 }), canopies));
+    wild.build(g);
 
     // Street lamps along the shed road and the waterfront.
     const pole = mat(0x4a5563);
@@ -257,49 +289,32 @@ export class PortLand {
       g.add(s);
     }
 
-    this.town = new Town(this.windowMat);
+    this.town = new Town(this.windowMat, this.theme);
     g.add(this.town.group);
-  }
-
-  private tree(trunks: Instance[], canopies: Instance[], x: number, z: number, seed: number) {
-    const h = 3 + hash(seed) * 3;
-    const s = 2.6 + hash(seed + 1) * 2.2;
-    trunks.push({ m: trs(x, GROUND_Y + h / 2, z, 1, h, 1), c: 0xffffff });
-    canopies.push({
-      m: trs(x, GROUND_Y + h + s * 0.7, z, s, s * 1.15, s, hash(seed) * 3),
-      c: COLOURS.leaves[Math.floor(hash(seed + 2) * COLOURS.leaves.length)],
-    });
   }
 
   private buildHills() {
     const g = this.group;
+    const th = this.theme;
     const geo = new THREE.IcosahedronGeometry(1, 2);
-    const hills = [
-      [-300, 360, 160, 50, 120, COLOURS.grassDark],
-      [-60, 420, 220, 70, 140, COLOURS.grass],
-      [220, 380, 180, 55, 110, COLOURS.grassDark],
-      [480, 330, 160, 45, 120, COLOURS.grass],
-      [-560, 300, 170, 60, 130, COLOURS.grass],
-      [-200, 700, 380, 190, 220, COLOURS.mountain],
-      [300, 760, 420, 230, 240, COLOURS.mountain],
-      [-700, 640, 300, 160, 200, COLOURS.mountain],
-      [750, 600, 300, 150, 200, COLOURS.mountain],
+    const flat = { flatShading: true, roughness: 1 };
+    // Near hills behind the town: rolling, or long low dunes in the desert.
+    const dunes = th.backdrop === 'mesas' ? 0.55 : 1;
+    const near = [
+      [-300, 360, 160, 50, 120, 0],
+      [-60, 420, 220, 70, 140, 1],
+      [220, 380, 180, 55, 110, 0],
+      [480, 330, 160, 45, 120, 1],
+      [-560, 300, 170, 60, 130, 1],
     ] as const;
-    for (const [x, z, sx, sy, sz, c] of hills) {
-      const m = new THREE.Mesh(geo, mat(c, { flatShading: true, roughness: 1 }));
-      m.scale.set(sx, sy, sz);
-      m.position.set(x, -sy * 0.15, z);
+    for (const [x, z, sx, sy, sz, shade] of near) {
+      const m = new THREE.Mesh(geo, mat(th.hills[shade], flat));
+      m.scale.set(sx, sy * dunes, sz);
+      m.position.set(x, -sy * dunes * 0.15, z);
       m.receiveShadow = true;
       g.add(m);
     }
-    // Snow caps on the far peaks.
-    const snow = mat(0xffffff, { flatShading: true });
-    for (const [x, z, sx, sy, sz] of hills.slice(5)) {
-      const cap = new THREE.Mesh(geo, snow);
-      cap.scale.set(sx * 0.32, sy * 0.3, sz * 0.32);
-      cap.position.set(x, sy * 0.66, z);
-      g.add(cap);
-    }
+    this.buildBackdrop(geo);
 
     // Islands out to sea, so the horizon is not empty.
     const islands = [
@@ -308,14 +323,111 @@ export class PortLand {
       [-60, -900, 120, 24, 70],
     ] as const;
     for (const [x, z, sx, sy, sz] of islands) {
-      const m = new THREE.Mesh(geo, mat(COLOURS.grassDark, { flatShading: true }));
+      const m = new THREE.Mesh(geo, mat(th.hills[0], { flatShading: true }));
       m.scale.set(sx, sy, sz);
       m.position.set(x, -sy * 0.3, z);
       g.add(m);
-      const beach = new THREE.Mesh(geo, mat(COLOURS.sand, { flatShading: true }));
+      const beach = new THREE.Mesh(geo, mat(th.ground.sand, { flatShading: true }));
       beach.scale.set(sx * 1.08, sy * 0.2, sz * 1.1);
       beach.position.set(x, -2, z);
       g.add(beach);
+    }
+  }
+
+  /** The far scenery that says where this port is. */
+  private buildBackdrop(geo: THREE.BufferGeometry) {
+    const g = this.group;
+    const th = this.theme;
+    const flat = { flatShading: true, roughness: 1 };
+    const far = [
+      [-200, 700, 380, 190, 220],
+      [300, 760, 420, 230, 240],
+      [-700, 640, 300, 160, 200],
+      [750, 600, 300, 150, 200],
+    ] as const;
+    const hill = (x: number, z: number, sx: number, sy: number, sz: number, colour: number, g2: THREE.BufferGeometry = geo) => {
+      const m = new THREE.Mesh(g2, mat(colour, flat));
+      m.scale.set(sx, sy, sz);
+      m.position.set(x, -sy * 0.15, z);
+      m.receiveShadow = true;
+      g.add(m);
+      return m;
+    };
+    const caps = (peaks: readonly (readonly number[])[], size: number) => {
+      const snow = mat(0xffffff, { flatShading: true });
+      for (const [x, z, sx, sy, sz] of peaks) {
+        const cap = new THREE.Mesh(geo, snow);
+        cap.scale.set(sx * size, sy * size * 0.94, sz * size);
+        cap.position.set(x, sy * (0.85 - size * 0.6), z);
+        g.add(cap);
+      }
+    };
+
+    switch (th.backdrop) {
+      case 'mountains':
+        for (const [x, z, sx, sy, sz] of far) hill(x, z, sx, sy, sz, th.far);
+        if (th.snowCaps) caps(far, 0.32);
+        break;
+      case 'peaks': {
+        // Taller, sharper northern mountains, deep in snow.
+        const peaks = far.map(([x, z, sx, sy, sz]) => [x, z, sx * 0.8, sy * 1.5, sz * 0.8] as const);
+        for (const [x, z, sx, sy, sz] of peaks) hill(x, z, sx, sy, sz, th.far);
+        caps(peaks, 0.45);
+        break;
+      }
+      case 'rocky':
+        for (const [x, z, sx, sy, sz] of far) hill(x, z, sx, sy * 0.75, sz, th.far);
+        break;
+      case 'mesas': {
+        // Flat-topped red rock with banded sides.
+        const rock = new THREE.CylinderGeometry(1, 1.25, 1, 7);
+        for (const [x, z, sx, sy, sz] of far) {
+          const h = sy * 0.7;
+          const m = new THREE.Mesh(rock, mat(th.far, flat));
+          m.scale.set(sx * 0.6, h, sz * 0.6);
+          m.position.set(x, h / 2 - 10, z);
+          g.add(m);
+          const band = new THREE.Mesh(rock, mat(0xe0a070, flat));
+          band.scale.set(sx * 0.61, h * 0.12, sz * 0.61);
+          band.position.set(x, h * 0.72 - 10, z);
+          g.add(band);
+        }
+        break;
+      }
+      case 'volcano': {
+        // Green hills round a smoking volcano.
+        for (const [x, z, sx, sy, sz] of far.filter((_, i) => i !== 1)) hill(x, z, sx, sy * 0.8, sz, th.far);
+        const cone = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 1, 1, 12), mat(0x6b5a4a, flat));
+        cone.scale.set(330, 300, 300);
+        cone.position.set(300, 120, 780);
+        g.add(cone);
+        const slopes = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 1.05, 1, 12), mat(th.far, flat));
+        slopes.scale.set(330, 150, 300);
+        slopes.position.set(300, 45, 780);
+        g.add(slopes);
+        for (let i = 0; i < 6; i++) {
+          const puff = glowSprite(0xd8dde2, 70 + i * 22);
+          puff.material.blending = THREE.NormalBlending;
+          puff.material.opacity = 0.5 - i * 0.06;
+          puff.position.set(300 + i * 18, 290 + i * 34, 780 + i * 6);
+          g.add(puff);
+        }
+        break;
+      }
+      case 'skyline': {
+        // Hazy hills, and the rest of the city filling the distance.
+        for (const [x, z, sx, sy, sz] of far) hill(x, z, sx, sy * 0.6, sz, th.far);
+        const towers: Instance[] = [];
+        for (let i = 0; i < 140; i++) {
+          const x = -720 + (i / 139) * 1440 + (hash(i * 3.1) - 0.5) * 12;
+          const z = 250 + hash(i * 7.3) * 230;
+          const h = 30 + Math.pow(hash(i * 1.9), 2) * 150 * (1 - Math.abs(x) / 900);
+          const w = 14 + hash(i * 5.7) * 20;
+          towers.push({ m: trs(x, GROUND_Y + h / 2, z, w, h, w * (0.7 + hash(i) * 0.6)), c: [0x9fb4c8, 0xb8c6d4, 0x8aa1b8, 0xc9d3dd, 0x7f97ae][i % 5] });
+        }
+        g.add(instanced(new THREE.BoxGeometry(1, 1, 1), mat(0xffffff, { roughness: 0.5, metalness: 0.2 }), towers));
+        break;
+      }
     }
   }
 
@@ -376,15 +488,7 @@ export class PortLand {
   }
 
   private buildBuoys() {
-    const spots = [
-      [-140, -36, 0xff3b3b],
-      [-260, -38, 0xff3b3b],
-      [-140, -64, 0x22c55e],
-      [-260, -66, 0x22c55e],
-      [160, -40, 0xff3b3b],
-      [160, -66, 0x22c55e],
-    ] as const;
-    spots.forEach(([x, z, c], i) => {
+    BUOYS.forEach(({ x, z, colour: c }, i) => {
       const g = new THREE.Group();
       const m = mat(c, { roughness: 0.5 });
       const body = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.6, 3, 10), m);
@@ -499,18 +603,66 @@ export class PortLand {
 
   private buildRtgs() {
     const yellow = mat(0xffc233, { roughness: 0.5 });
-    for (let i = 0; i < 2; i++) {
+    const steel = mat(0x3b4452, { roughness: 0.6 });
+    RTGS.forEach((rtg) => {
       const g = new THREE.Group();
       // Legs stand in the lanes either side of a four-row block.
       for (const x of [-2, 2]) for (const z of [-7.8, 7.8]) g.add(box(0.9, 16, 0.9, yellow, x, 8, z));
       for (const x of [-2, 2]) g.add(box(0.9, 1.4, 16.6, yellow, x, 16.5, 0));
       g.add(box(4.8, 1.2, 1, yellow, 0, 16.5, -7.8));
       g.add(box(4.8, 1.2, 1, yellow, 0, 16.5, 7.8));
-      g.add(box(3.6, 2, 3.4, mat(0xffffff), 0, 15, 3));
-      g.position.set(0, GROUND_Y, i ? 52.8 : 36.8);
-      this.rtgs.push(g);
+      // Trolley across the top, hoist ropes, spreader and the box it lifts.
+      const trolley = new THREE.Group();
+      trolley.add(box(3.6, 2, 3.4, mat(0xffffff), 0, 15, 0));
+      const rope = box(0.12, 1, 0.12, steel, 0, 0, 0);
+      rope.geometry.translate(0, -0.5, 0);
+      rope.position.y = 14;
+      trolley.add(rope);
+      const spreader = new THREE.Group();
+      spreader.add(box(6.2, 0.35, 2.5, yellow, 0, 0.18, 0));
+      spreader.add(box(1.2, 0.5, 1.2, yellow, 0, 0.6, 0));
+      const carried = containerMesh(0xffffff);
+      carried.position.y = -1.25;
+      spreader.add(carried);
+      trolley.add(spreader);
+      g.add(trolley);
+      g.position.set(0, GROUND_Y, rtg.z);
       this.group.add(g);
+      // Its stacks' boxes, drawn in the yard.
+      const boxes = new THREE.InstancedMesh(containerGeometry(), containerMaterial(), rtg.stacks.length * RTG_BOXES);
+      boxes.castShadow = true;
+      boxes.receiveShadow = true;
+      this.group.add(boxes);
+      this.rtgs.push({ g, trolley, rope, spreader, carried, boxes, state: '' });
+    });
+  }
+
+  /** Put a gantry where yard.ts says, with its boxes. */
+  private updateRtg(i: number, t: number) {
+    const r = this.rtgs[i];
+    const w = rtgWork(i, t);
+    r.g.position.x = w.x;
+    r.trolley.position.z = w.z - RTGS[i].z;
+    r.spreader.position.y = w.under;
+    r.rope.scale.y = Math.max(0.05, 14 - (w.under + 0.85));
+    r.carried.visible = w.carrying !== null;
+    if (w.carrying !== null) (r.carried.material as THREE.MeshStandardMaterial).color.setHex(w.carrying);
+    const state = w.stacks.map((s) => s.boxes.join('.')).join('|');
+    if (state === r.state) return;
+    r.state = state;
+    const m = new THREE.Matrix4();
+    const c = new THREE.Color();
+    let n = 0;
+    for (const s of w.stacks) {
+      s.boxes.forEach((colour, h) => {
+        r.boxes.setMatrixAt(n, m.makeTranslation(yardX(s.col), GROUND_Y + 1.27 + h * STACK_PITCH, yardZ(s.row)));
+        r.boxes.setColorAt(n, c.setHex(colour));
+        n++;
+      });
     }
+    r.boxes.count = n;
+    r.boxes.instanceMatrix.needsUpdate = true;
+    if (r.boxes.instanceColor) r.boxes.instanceColor.needsUpdate = true;
   }
 
   private buildBoats() {
@@ -615,9 +767,10 @@ export class PortLand {
       placeOnLoop(g, d);
     });
 
-    this.rtgs.forEach((g, i) => {
-      g.position.x = Math.sin(t * 0.07 + i * 2) * 110;
-    });
+    // The yard gantries shuffle boxes between their stacks (yard.ts). They
+    // work neighbouring blocks and share the lane between, so each keeps to
+    // its own half of the yard.
+    this.rtgs.forEach((_, i) => this.updateRtg(i, t));
 
     for (const b of this.buoys) {
       b.g.position.y = heightAt(b.x, b.z) - 0.4;
