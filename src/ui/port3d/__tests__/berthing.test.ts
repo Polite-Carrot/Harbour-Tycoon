@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { CYCLE, T, berthZ, shipsAt, standoffZ, tugsAt } from '../berthing';
-import { HULL_LENGTH } from '../ship';
+import { CYCLE, T, berthZ, shipsAt, standoffZ, tugCount, tugsAt } from '../berthing';
+import { HULL_BEAM, HULL_LENGTH } from '../ship';
 
 /**
  * The berthing routine is pure maths, so its promises can be checked
@@ -66,8 +66,30 @@ describe('ships', () => {
 });
 
 describe('tugs', () => {
-  it('there are none without the upgrade', () => {
+  it('one always works the berth, and the upgrade adds a second', () => {
+    expect(tugCount(0)).toBe(1);
+    expect(tugCount(3)).toBe(1);
+    expect(tugCount(4)).toBe(2);
     expect(tugsAt(100, 1, 0)).toEqual([]);
+  });
+
+  it('a ship only ever moves sideways with a tug on her: pushing in, or towing off', () => {
+    for (const scale of scales) {
+      for (let s = 0; s < CYCLE * 2; s += 0.25) {
+        for (const ship of shipsAt(s, scale)) {
+          if (ship.sideways < 0.05) continue;
+          const tugs = tugsAt(s, scale, tugCount(0)).filter((t) => t.ship === ship.index);
+          expect(tugs.length, `tau ${ship.tau}`).toBe(1);
+          const [tug] = tugs;
+          // Within a tug's length of the seaward side of the hull.
+          const gap = ship.z - (HULL_BEAM / 2) * scale - tug.z;
+          expect(gap, `tau ${ship.tau}`).toBeGreaterThan(0);
+          expect(gap, `tau ${ship.tau}`).toBeLessThan(22);
+          if (ship.phase === 'pushIn') expect(tug.yaw).toBeCloseTo(-Math.PI / 2, 1);
+          else expect(tug.line).not.toBeNull();
+        }
+      }
+    }
   });
 
   it('never teleport — not even when they swap from one ship to the next', () => {

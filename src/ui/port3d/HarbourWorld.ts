@@ -7,7 +7,7 @@ import { Crane } from './crane';
 import { CruiseTerminal, Dredger, RailLink, TallShip } from './expansions';
 import { liveryFor } from './palette';
 import { PortLand } from './port';
-import { berthZ as berthZOf, shipsAt, tugsAt } from './berthing';
+import { berthZ as berthZOf, shipsAt, tugCount, tugsAt } from './berthing';
 import { DECK_Y, HULL_BEAM, HULL_LENGTH, ShipModel, buildTug } from './ship';
 import { SeaLife, type Sighting } from './sealife';
 import { SkyLayer } from './sky';
@@ -193,10 +193,10 @@ export class HarbourWorld {
     this.tallShip.update(t, now, heightAt);
 
     // --- tugs ------------------------------------------------------------------
-    // One tug from the first level, a pair from level 4. They meet each ship,
-    // push her in, stand by, tow her off and go back for the next.
-    const tugCount = up.tugboats >= 4 ? 2 : up.tugboats >= 1 ? 1 : 0;
-    const tugPoses = tugsAt(seconds, scale, tugCount);
+    // Always one tug, a pair from level 4. They meet each ship, push her in,
+    // stand by, tow her off and go back for the next — so a ship never
+    // slides sideways onto or off the berth by herself.
+    const tugPoses = tugsAt(seconds, scale, tugCount(up.tugboats));
     this.tugs.forEach((tug, i) => {
       const pose = tugPoses[i];
       tug.visible = !!pose;

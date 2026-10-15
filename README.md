@@ -45,7 +45,7 @@ On the web the port is a full 3D scene (three.js) you can explore:
   prompt pops up when a whale breaches; tap **Look** to fly the camera there.
 
 **Ship handling.** Ships come in parallel to the quay and stop off the berth;
-tugs (from the first Tugboats level, a pair from level 4) meet them, push them
+tugs (always one, a pair from Tugboats level 4) meet them, push them
 sideways onto the berth, stand by during unloading, haul them off on towlines
 and cruise back to meet the next ship. The economy's cargo cycle runs far
 faster than any real berthing could, so the 3D berth runs its own steady

@@ -189,7 +189,14 @@ const lerpAngle = (a: number, b: number, t: number) => {
   return a + d * t;
 };
 
-/** All tugs at a moment. `count` comes from the tugboat upgrade. */
+/**
+ * How many tugs work the berth. Ships never move sideways under their own
+ * power here, so the port always has one tug to push them on and tow them
+ * off; the Tugboats upgrade adds a second from level 4, bow and stern.
+ */
+export const tugCount = (level: number) => (level >= 4 ? 2 : 1);
+
+/** All tugs at a moment. `count` usually comes from `tugCount`. */
 export function tugsAt(seconds: number, scale: number, count: number): TugPose[] {
   if (count <= 0) return [];
   // The ship the tugs are working: the one whose life is inside [-4, 44).
@@ -219,14 +226,15 @@ export function tugsAt(seconds: number, scale: number, count: number): TugPose[]
       const yaw = lerpAngle(lerpAngle(from.yaw, heading, smooth(T.tugsFrom, T.tugsFrom + 2, tau)), to.yaw, smooth(T.tugsMeet - 2.5, T.tugsMeet, tau));
       pose = { x, z, yaw };
       effort = 0.8;
-    } else if (tau < T.stop - 1.5) {
+    } else if (tau < T.stop - 3) {
       pose = at('escort');
       effort = 0.5;
     } else if (tau < T.alongside) {
-      // Swing round and put the nose on the hull, then push her in.
+      // Swing round and put the nose on the hull as she comes to a stop,
+      // then push her in: she never moves sideways before the tug is on.
       const a = at('escort');
       const b = at('push');
-      const k = smooth(T.stop - 1.5, T.stop + 1, tau);
+      const k = smooth(T.stop - 3, T.stop, tau);
       pose = { x: lerp(a.x, b.x, k), z: lerp(a.z, b.z, k), yaw: lerpAngle(a.yaw, b.yaw, k) };
       effort = tau > T.stop ? 1 : 0.6;
     } else if (tau < T.unloaded - 4) {
