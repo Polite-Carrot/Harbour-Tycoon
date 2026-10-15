@@ -19,10 +19,16 @@ On the web the port is a full 3D scene (three.js) you can explore:
   put up light masts, the customs house appears on the quay, and contracts fill
   the container yard.
 
-- **Detailed models.** Containers have corrugated walls, corner castings and
-  door gear. Ships have shaped hulls with a bulbous bow, bridge, lifeboats,
-  railings, lashing bridges, a turning radar, a spinning propeller, funnel
-  smoke and their name on the bow. Tugs and sailboats are built the same way.
+- **Detailed models.** The hero models (container ship, tug, 20 ft
+  container, gantry crane, dolphin, humpback, shark, fish, yacht, cruise
+  liner and the VIP tall ship) are built in code to a written spec, in
+  `src/ui/port3d/models/`. Containers have corrugated walls, corner castings
+  and door gear. Ships have lofted hulls painted in crisp bands, a bulbous
+  bow, bridge wings, lifeboats, railings, lashing frames, a turning radar and
+  a spinning propeller, plus funnel smoke and their name on the bow. Each
+  port repaints the ship's hull, bottom and funnel and the cranes in its
+  livery, and ship, tug and liner windows light up at night. See
+  [The models](#the-models).
 - **Living sea.** Rolling waves (calm inside the breakwater, a real swell
   outside), sky reflections, sun glitter, whitecaps, foam on the quay, beach
   and breakwater, and ship wakes drawn into the water. The water is slightly
@@ -45,6 +51,37 @@ and cruise back to meet the next ship. The economy's cargo cycle runs far
 faster than any real berthing could, so the 3D berth runs its own steady
 routine (`src/ui/port3d/berthing.ts`) while the money, the HUD and the "+$"
 pops still follow the simulation exactly.
+
+## The models
+
+`src/ui/port3d/models/` builds the harbour's hero models. They follow one
+spec, so the same code serves the game and a standalone .glb export:
+
+- **Axes and units.** +Y up, bow or nose toward +X, 1 unit = 1 game unit.
+  Boats sit with their origin on the waterline at the centre of the hull;
+  the crane at the centre of its base on the ground; the container and the
+  animals at their centre.
+- **Moving parts are named nodes.** On the ship, `Radar` turns about Y and
+  `Propeller` about X. On the crane, `Trolley` slides along Z, and
+  `Spreader` and `HoistRopes` hang from it: lower the spreader by its local
+  Y and stretch the ropes (scale Y) to match. The tall ship's square sails
+  are `Sail…` meshes that billow along local X.
+- **Budgets.** Container ship 15,000 triangles, tug 4,000, container 800,
+  crane 6,000, dolphin and shark 3,000, whale 5,000, fish 300.
+  `models.test.ts` holds every model to its budget, its dimensions and its
+  named parts.
+- **Colour.** The container is one pure-white material so each instance
+  can be tinted. The animals are vertex-coloured (dark back, pale belly) and
+  bend in the vertex shader as they swim, along evenly spaced rings.
+
+```bash
+npm run models:export               # every model -> models-out/*.glb + manifest.json
+npm run models:export -- dolphin    # just the ids listed
+```
+
+The export fails if a model goes over budget, reaches 2 MB, or loses a
+named moving part. `models-out/` is git-ignored: the game builds its models
+at runtime and ships no model files.
 
 ## Coming back for more
 
@@ -173,6 +210,7 @@ src/ui/                 Presentation
   port3d/               The three.js harbour: world, sky, water, ship, crane, land,
                         containers, sealife (dolphins, whales, sharks, fish),
                         town (streets, square, town hall, people, traffic)
+    models/             The hero models, built to spec (see "The models")
   Hud.tsx               Money and berth status, overlaid on the scene
   SettingsButton.tsx    Gear cog, top right of the scene
   SettingsModal.tsx     Lifetime stats, resume, guarded reset

@@ -281,9 +281,12 @@ export class HarbourWorld {
     for (const sh of this.ships) {
       this.scene.remove(sh.group);
       // Window material is shared with the land; detach before disposing.
+      // Hulls carry a material per paint band, so look inside arrays too.
+      const shared = this.land.windowMat;
       sh.group.traverse((o) => {
         const mesh = o as THREE.Mesh;
-        if (mesh.material === this.land.windowMat) mesh.material = new THREE.MeshBasicMaterial();
+        if (Array.isArray(mesh.material)) mesh.material = mesh.material.filter((m) => m !== shared);
+        else if (mesh.material === shared) mesh.material = new THREE.MeshBasicMaterial();
       });
       disposeTree(sh.group);
     }

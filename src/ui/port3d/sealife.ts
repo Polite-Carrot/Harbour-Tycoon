@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { DOLPHIN_LENGTH, FISH_LENGTH, SHARK_LENGTH, WHALE_LENGTH, dolphinBody, fishBody, sharkBody, whaleBody, type FishColours } from './models/animals';
 import { glow, hash, lerp, smoothstep } from './util';
 
 /**
@@ -7,338 +7,13 @@ import { glow, hash, lerp, smoothstep } from './util';
  * humpback whales out at sea (blowing, fluking, breaching), sharks cruising
  * with their fins out, and schools of fish just under the surface.
  *
- * Bodies are lofted from cross-sections with countershading baked into
- * vertex colours, and flex in the vertex shader as they swim — whales and
- * dolphins beat their tails up and down, fish and sharks side to side.
+ * Bodies come from models/animals.ts — lofted with evenly spaced rings and
+ * countershading baked into vertex colours — and flex in the vertex shader
+ * as they swim: whales and dolphins beat their tails up and down, fish and
+ * sharks side to side.
  */
 
 type Height = (x: number, z: number) => number;
-
-// ---------------------------------------------------------------------------
-// Geometry
-// ---------------------------------------------------------------------------
-
-/** A cross-section keyframe along the body: u is 0 at the tail, 1 at the nose. */
-interface Key {
-  u: number;
-  h: number;
-  w: number;
-  y?: number;
-}
-
-function sample(keys: Key[], u: number): { h: number; w: number; y: number } {
-  for (let i = 0; i < keys.length - 1; i++) {
-    const a = keys[i];
-    const b = keys[i + 1];
-    if (u >= a.u && u <= b.u) {
-      const p = smoothstep(a.u, b.u, u);
-      return { h: lerp(a.h, b.h, p), w: lerp(a.w, b.w, p), y: lerp(a.y ?? 0, b.y ?? 0, p) };
-    }
-  }
-  const k = keys[keys.length - 1];
-  return { h: k.h, w: k.w, y: k.y ?? 0 };
-}
-
-type Paint = (u: number, up: number, side: number) => THREE.Color;
-
-/** A body of revolution with elliptical sections, nose toward +x. */
-function loft(length: number, keys: Key[], paint: Paint, stations = 44, ring = 16): THREE.BufferGeometry {
-  const pos: number[] = [];
-  const col: number[] = [];
-  const idx: number[] = [];
-  for (let i = 0; i < stations; i++) {
-    const u = i / (stations - 1);
-    const x = -length / 2 + u * length;
-    const s = sample(keys, u);
-    for (let j = 0; j < ring; j++) {
-      const a = (j / ring) * Math.PI * 2;
-      const up = Math.cos(a);
-      const side = Math.sin(a);
-      pos.push(x, s.y * length + up * s.h * length, side * s.w * length);
-      const c = paint(u, up, side);
-      col.push(c.r, c.g, c.b);
-    }
-  }
-  for (let i = 0; i < stations - 1; i++) {
-    for (let j = 0; j < ring; j++) {
-      const a = i * ring + j;
-      const a1 = i * ring + ((j + 1) % ring);
-      const b = a + ring;
-      const b1 = a1 + ring;
-      idx.push(a, a1, b, b, a1, b1);
-    }
-  }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  geo.setIndex(idx);
-  geo.computeVertexNormals();
-  return geo.toNonIndexed();
-}
-
-/** A fin: a flat shape given a little thickness, painted one colour. */
-function fin(shape: THREE.Shape, thickness: number, colour: THREE.Color): THREE.BufferGeometry {
-  const geo = new THREE.ExtrudeGeometry(shape, { depth: thickness, bevelEnabled: false, curveSegments: 8 });
-  geo.translate(0, 0, -thickness / 2);
-  const flat = geo.index ? geo.toNonIndexed() : geo;
-  if (flat !== geo) geo.dispose();
-  flat.deleteAttribute('uv');
-  const n = flat.attributes.position.count;
-  const c = new Float32Array(n * 3);
-  for (let i = 0; i < n; i++) c.set([colour.r, colour.g, colour.b], i * 3);
-  flat.setAttribute('color', new THREE.BufferAttribute(c, 3));
-  flat.computeVertexNormals();
-  return flat;
-}
-
-function eye(r: number, x: number, y: number, z: number): THREE.BufferGeometry {
-  const g = new THREE.SphereGeometry(r, 8, 6).toNonIndexed();
-  g.deleteAttribute('uv');
-  g.translate(x, y, z);
-  const n = g.attributes.position.count;
-  g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(n * 3).fill(0.04), 3));
-  return g;
-}
-
-function merge(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
-  for (const p of parts) if (p.attributes.uv) p.deleteAttribute('uv');
-  const g = mergeGeometries(parts, false)!;
-  parts.forEach((p) => p.dispose());
-  return g;
-}
-
-const C = (hex: number) => new THREE.Color(hex);
-
-/** Countershading: dark back, pale belly, a soft line between. */
-const countershade = (back: number, belly: number, line = 0.05, soft = 0.35): Paint => {
-  const bk = C(back);
-  const bl = C(belly);
-  return (_u, up) => bl.clone().lerp(bk, smoothstep(line - soft, line + soft, up));
-};
-
-function dolphinGeometry(L: number): THREE.BufferGeometry {
-  const back = 0x58708a;
-  const belly = 0xeef3f6;
-  const keys: Key[] = [
-    { u: 0, h: 0.012, w: 0.008 },
-    { u: 0.12, h: 0.05, w: 0.03 },
-    { u: 0.35, h: 0.1, w: 0.075 },
-    { u: 0.6, h: 0.12, w: 0.1, y: 0.005 },
-    { u: 0.8, h: 0.1, w: 0.085, y: 0.01 },
-    { u: 0.88, h: 0.065, w: 0.06, y: 0.0 },
-    { u: 0.91, h: 0.035, w: 0.032, y: -0.025 },
-    { u: 1, h: 0.012, w: 0.012, y: -0.03 },
-  ];
-  // A darker cape over the back, and a pale flank blaze, like a common dolphin.
-  const paint: Paint = (u, up, side) => {
-    const base = countershade(back, belly, -0.05, 0.3)(u, up, side);
-    if (up > 0.55 && u > 0.3 && u < 0.85) base.multiplyScalar(0.82);
-    const blaze = Math.exp(-Math.pow((u - 0.6) / 0.08, 2)) * Math.exp(-Math.pow((up + 0.05) / 0.25, 2));
-    return base.lerp(C(0xd8e4ec), blaze * 0.6);
-  };
-  const body = loft(L, keys, paint);
-  const backCol = C(back);
-
-  const dorsal = new THREE.Shape();
-  dorsal.moveTo(0.12, 0);
-  dorsal.quadraticCurveTo(0.02, 0.12, -0.12, 0.2);
-  dorsal.quadraticCurveTo(-0.07, 0.08, -0.12, 0);
-  dorsal.lineTo(0.12, 0);
-  const dg = fin(scaleShape(dorsal, L), 0.02 * L, backCol);
-  dg.translate(0.02 * L, 0.1 * L, 0);
-
-  const flukes = flukeShape(0.16, 0.05);
-  const fg = fin(scaleShape(flukes, L), 0.012 * L, backCol);
-  fg.rotateX(Math.PI / 2);
-  fg.translate(-L / 2 + 0.03 * L, 0, 0);
-
-  const parts = [body, dg, fg];
-  for (const side of [-1, 1]) {
-    const pec = new THREE.Shape();
-    pec.moveTo(0.04, 0);
-    pec.quadraticCurveTo(0, 0.08, -0.07, 0.13);
-    pec.quadraticCurveTo(-0.04, 0.05, -0.04, 0);
-    pec.lineTo(0.04, 0);
-    const pg = fin(scaleShape(pec, L), 0.012 * L, backCol);
-    pg.rotateX((side * Math.PI) / 2);
-    pg.rotateX(side * 0.55);
-    pg.translate(0.2 * L, -0.06 * L, side * 0.07 * L);
-    parts.push(pg);
-    parts.push(eye(0.012 * L, 0.36 * L, 0.0, side * 0.055 * L));
-  }
-  return merge(parts);
-}
-
-function whaleGeometry(L: number): THREE.BufferGeometry {
-  const back = 0x1c232a;
-  const belly = 0xe2e8ec;
-  const keys: Key[] = [
-    { u: 0, h: 0.012, w: 0.01 },
-    { u: 0.12, h: 0.045, w: 0.03 },
-    { u: 0.32, h: 0.11, w: 0.1 },
-    { u: 0.55, h: 0.15, w: 0.15, y: -0.012 },
-    { u: 0.75, h: 0.145, w: 0.145, y: -0.02 },
-    { u: 0.9, h: 0.1, w: 0.11, y: -0.022 },
-    { u: 0.97, h: 0.055, w: 0.07, y: -0.02 },
-    { u: 1, h: 0.015, w: 0.03, y: -0.02 },
-  ];
-  // Humpback: dark all over, pale grooved throat.
-  const paint: Paint = (u, up, side) => {
-    const c = countershade(back, belly, -0.6, 0.18)(u, up, side);
-    // Pale grooved throat, and the knobbly tubercles along the head.
-    if (up < -0.3 && u > 0.6) c.multiplyScalar(0.82 + 0.18 * (0.5 + 0.5 * Math.sin(side * 60)));
-    if (up > 0.6 && u > 0.82 && hash(Math.round(u * 60) * 7 + Math.round(side * 9)) > 0.6) c.multiplyScalar(1.7);
-    // Barnacle-white blotches along the lower jaw.
-    if (up < -0.1 && up > -0.5 && u > 0.85 && hash(Math.round(u * 80) + Math.round(up * 20) * 13) > 0.7) c.lerp(C(0xd8dcd6), 0.8);
-    return c;
-  };
-  const body = loft(L, keys, paint, 48, 18);
-  const backCol = C(back);
-
-  // A low hump instead of a tall fin.
-  const hump = new THREE.Shape();
-  hump.moveTo(0.06, 0);
-  hump.quadraticCurveTo(0, 0.05, -0.05, 0.045);
-  hump.quadraticCurveTo(-0.04, 0.01, -0.08, 0);
-  hump.lineTo(0.06, 0);
-  const hg = fin(scaleShape(hump, L), 0.03 * L, backCol);
-  hg.translate(-0.14 * L, 0.085 * L, 0);
-
-  // Broad flukes, white beneath — each humpback's is unique.
-  const flukes = flukeShape(0.2, 0.06);
-  const fg = fin(scaleShape(flukes, L), 0.012 * L, backCol);
-  fg.rotateX(Math.PI / 2);
-  fg.translate(-L / 2 + 0.04 * L, 0, 0);
-  const under = fin(scaleShape(flukes, L * 0.92), 0.004 * L, C(0xf2f5f7));
-  under.rotateX(Math.PI / 2);
-  under.translate(-L / 2 + 0.035 * L, -0.007 * L, 0);
-
-  const parts = [body, hg, fg, under];
-  // Long white pectoral fins — the humpback's signature.
-  for (const side of [-1, 1]) {
-    // Scalloped leading edge, slim tip, smooth trailing edge.
-    const pts: THREE.Vector2[] = [];
-    for (let i = 0; i <= 24; i++) {
-      const k = i / 24;
-      const x = lerp(0.035, -0.07, k * k);
-      const y = k * 0.3;
-      pts.push(new THREE.Vector2(x + Math.max(0, Math.sin(k * Math.PI * 9)) * 0.006 * (1 - k * 0.5), y));
-    }
-    pts.push(new THREE.Vector2(-0.09, 0.29));
-    for (let i = 24; i >= 0; i--) {
-      const k = i / 24;
-      pts.push(new THREE.Vector2(lerp(-0.045, -0.09, k), k * 0.27));
-    }
-    const pg = fin(new THREE.Shape(pts.map((p) => p.multiplyScalar(L))), 0.014 * L, C(0xe8edf0));
-    pg.rotateX((side * Math.PI) / 2);
-    pg.rotateX(side * 0.75);
-    pg.rotateY(-side * 0.5);
-    pg.translate(0.16 * L, -0.09 * L, side * 0.12 * L);
-    parts.push(pg);
-    parts.push(eye(0.01 * L, 0.37 * L, -0.04 * L, side * 0.1 * L));
-  }
-  return merge(parts);
-}
-
-function sharkGeometry(L: number): THREE.BufferGeometry {
-  const back = 0x5f6f7c;
-  const belly = 0xf1f4f6;
-  const keys: Key[] = [
-    { u: 0, h: 0.02, w: 0.012 },
-    { u: 0.15, h: 0.045, w: 0.03 },
-    { u: 0.45, h: 0.1, w: 0.08 },
-    { u: 0.68, h: 0.11, w: 0.095 },
-    { u: 0.88, h: 0.07, w: 0.075, y: -0.005 },
-    { u: 1, h: 0.012, w: 0.015, y: -0.01 },
-  ];
-  const body = loft(L, keys, countershade(back, belly, -0.15, 0.12));
-  const bc = C(back);
-
-  const dorsal = new THREE.Shape();
-  dorsal.moveTo(0.1, 0);
-  dorsal.quadraticCurveTo(0.04, 0.12, -0.04, 0.22);
-  dorsal.quadraticCurveTo(-0.03, 0.08, -0.1, 0);
-  dorsal.lineTo(0.1, 0);
-  const dg = fin(scaleShape(dorsal, L), 0.015 * L, bc);
-  dg.translate(0.06 * L, 0.095 * L, 0);
-
-  // Heterocercal tail: a long upper lobe.
-  const tail = new THREE.Shape();
-  tail.moveTo(0.04, 0);
-  tail.quadraticCurveTo(-0.06, 0.12, -0.14, 0.24);
-  tail.quadraticCurveTo(-0.07, 0.05, -0.05, 0);
-  tail.quadraticCurveTo(-0.07, -0.06, -0.1, -0.12);
-  tail.quadraticCurveTo(-0.02, -0.05, 0.04, 0);
-  const tg = fin(scaleShape(tail, L), 0.01 * L, bc);
-  tg.translate(-L / 2 + 0.03 * L, 0, 0);
-
-  const second = new THREE.Shape();
-  second.moveTo(0.03, 0);
-  second.lineTo(-0.02, 0.05);
-  second.lineTo(-0.03, 0);
-  second.lineTo(0.03, 0);
-  const sg = fin(scaleShape(second, L), 0.008 * L, bc);
-  sg.translate(-0.22 * L, 0.045 * L, 0);
-
-  const parts = [body, dg, tg, sg];
-  for (const side of [-1, 1]) {
-    const pec = new THREE.Shape();
-    pec.moveTo(0.06, 0);
-    pec.quadraticCurveTo(0, 0.1, -0.08, 0.17);
-    pec.quadraticCurveTo(-0.03, 0.06, -0.05, 0);
-    pec.lineTo(0.06, 0);
-    const pg = fin(scaleShape(pec, L), 0.01 * L, bc);
-    pg.rotateX((side * Math.PI) / 2);
-    pg.rotateX(side * 0.35);
-    pg.translate(0.15 * L, -0.07 * L, side * 0.07 * L);
-    parts.push(pg);
-    parts.push(eye(0.01 * L, 0.38 * L, 0.01 * L, side * 0.05 * L));
-  }
-  return merge(parts);
-}
-
-function fishGeometry(L: number, back: number, belly: number, stripes: number | null): THREE.BufferGeometry {
-  const keys: Key[] = [
-    { u: 0, h: 0.04, w: 0.015 },
-    { u: 0.2, h: 0.08, w: 0.03 },
-    { u: 0.55, h: 0.15, w: 0.06 },
-    { u: 0.85, h: 0.11, w: 0.05 },
-    { u: 1, h: 0.02, w: 0.015 },
-  ];
-  const shade = countershade(back, belly, 0, 0.3);
-  const paint: Paint = (u, up, side) => {
-    const c = shade(u, up, side);
-    if (stripes !== null && up > -0.2 && Math.sin(u * 40) > 0.4) c.lerp(C(stripes), 0.7);
-    return c;
-  };
-  const body = loft(L, keys, paint, 14, 8);
-  const tail = new THREE.Shape();
-  tail.moveTo(0.05, 0);
-  tail.lineTo(-0.12, 0.13);
-  tail.lineTo(-0.08, 0);
-  tail.lineTo(-0.12, -0.13);
-  tail.lineTo(0.05, 0);
-  const tg = fin(scaleShape(tail, L), 0.01 * L, C(back));
-  tg.translate(-L / 2, 0, 0);
-  return merge([body, tg]);
-}
-
-function flukeShape(span: number, chord: number): THREE.Shape {
-  const s = new THREE.Shape();
-  s.moveTo(0.02, 0);
-  s.quadraticCurveTo(-chord * 0.4, span * 0.6, -chord * 1.6, span);
-  s.quadraticCurveTo(-chord * 1.1, span * 0.45, -chord * 1.05, 0.004);
-  s.lineTo(-chord * 0.85, 0);
-  s.lineTo(-chord * 1.05, -0.004);
-  s.quadraticCurveTo(-chord * 1.1, -span * 0.45, -chord * 1.6, -span);
-  s.quadraticCurveTo(-chord * 0.4, -span * 0.6, 0.02, 0);
-  return s;
-}
-
-function scaleShape(shape: THREE.Shape, k: number): THREE.Shape {
-  const pts = shape.getPoints(10).map((p) => new THREE.Vector2(p.x * k, p.y * k));
-  return new THREE.Shape(pts);
-}
 
 // ---------------------------------------------------------------------------
 // Swimming material
@@ -558,10 +233,10 @@ export interface Sighting {
   at: number;
 }
 
-const DOLPHIN_L = 3.4;
-const WHALE_L = 17;
-const SHARK_L = 7;
-const FISH_L = 1.25;
+const DOLPHIN_L = DOLPHIN_LENGTH;
+const WHALE_L = WHALE_LENGTH;
+const SHARK_L = SHARK_LENGTH;
+const FISH_L = FISH_LENGTH;
 
 export class SeaLife {
   readonly group = new THREE.Group();
@@ -583,7 +258,7 @@ export class SeaLife {
     this.group.add(this.splashes.group);
 
     // Dolphin pod: four, in a loose diamond.
-    const dGeo = dolphinGeometry(DOLPHIN_L);
+    const dGeo = dolphinBody();
     const offsets = [[0, 0], [-4, 3], [-5, -2.5], [-9, 0.5]];
     offsets.forEach(([ox, oz], i) => {
       const { material, swim } = swimMaterial(DOLPHIN_L, false);
@@ -602,7 +277,7 @@ export class SeaLife {
     });
 
     // Humpbacks, out beyond the breakwater.
-    const wGeo = whaleGeometry(WHALE_L);
+    const wGeo = whaleBody();
     const whaleSpots = [
       [-210, -230, 150, 60, 0.012, 0],
       [230, -270, 160, 55, -0.01, 21],
@@ -640,7 +315,7 @@ export class SeaLife {
     }
 
     // Sharks: one patrolling outside the breakwater, one off the west entrance.
-    const sGeo = sharkGeometry(SHARK_L);
+    const sGeo = sharkBody();
     const rippleGeo = new THREE.RingGeometry(0.6, 1.1, 20, 1, Math.PI * 0.6, Math.PI * 0.8).rotateX(-Math.PI / 2);
     for (const [cx, cz, r, speed] of [[60, -150, 38, 0.11], [-150, -125, 26, -0.14]] as const) {
       const { material, swim } = swimMaterial(SHARK_L, true);
@@ -653,11 +328,11 @@ export class SeaLife {
     }
 
     // Fish schools in the harbour and off the beaches.
-    const kinds = [
-      { back: 0x2f6f8f, belly: 0xdfe9ef, stripes: 0x1d3f57 }, // mackerel
-      { back: 0xffc21a, belly: 0xfff1a8, stripes: null }, // yellow tang
-      { back: 0xff7a2f, belly: 0xffd5b0, stripes: 0xffffff }, // clownish
-      { back: 0x8fb3c9, belly: 0xf4f7f9, stripes: null }, // sardines
+    const kinds: FishColours[] = [
+      { back: 0x2f6f8f, belly: 0xdfe9ef, fins: 0x3c7f99, stripes: 0x1d3f57 }, // mackerel
+      { back: 0xffc21a, belly: 0xfff1a8, fins: 0xf2a900 }, // yellow tang
+      { back: 0xff7a2f, belly: 0xffd5b0, fins: 0xe8601c, stripes: 0xffffff }, // clownish
+      { back: 0x8fb3c9, belly: 0xf4f7f9, fins: 0x7a9fb6 }, // sardines
     ];
     const spots = [
       [-100, -74, 30, 8, 0.05, -1.0, 0],
@@ -671,7 +346,7 @@ export class SeaLife {
       const { material, swim } = swimMaterial(FISH_L, true, true);
       swim.amp.value = 0.14;
       const count = 36;
-      const mesh = new THREE.InstancedMesh(fishGeometry(FISH_L, k.back, k.belly, k.stripes), material, count);
+      const mesh = new THREE.InstancedMesh(fishBody(k), material, count);
       mesh.frustumCulled = false;
       this.group.add(mesh);
       this.schools.push({ mesh, swim, cx, cz, rx, rz, speed, phase: hash(cx + cz) * 6, depth, count, jumper: -1, jumpAt: hash(cx) * 8 });

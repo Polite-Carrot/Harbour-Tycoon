@@ -6,6 +6,9 @@ node_modules/
 # Expo
 .expo/
 dist/
+
+# npm run models:export
+models-out/
 web-build/
 expo-env.d.ts
 
