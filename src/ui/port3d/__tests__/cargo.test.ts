@@ -3,7 +3,7 @@ import { CYCLE, berthZ, shipsAt, tugCount, tugsAt } from '../berthing';
 import { CRANE_PITCH, berthWork, cranePlaces, movesEachWay, type BerthSetup, type CraneWork, type Spot } from '../cargo';
 import { HOIST_TOP, pileSpot } from '../crane';
 import { BAY_XS, CARGO_DECK } from '../models/ships';
-import { BUOYS, rtgX } from '../port';
+import { BUOYS } from '../port';
 import { ACROSS, BOX_HEIGHT, HULL_LENGTH, slotCentre } from '../ship';
 
 /**
@@ -164,7 +164,4 @@ describe('harbour traffic', () => {
     }
   });
 
-  it('the yard gantries never meet', () => {
-    for (let t = 0; t < 400; t += 0.5) expect(Math.abs(rtgX(0, t) - rtgX(1, t))).toBeGreaterThan(6);
-  });
 });

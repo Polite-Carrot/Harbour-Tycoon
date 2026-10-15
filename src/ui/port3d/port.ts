@@ -4,6 +4,7 @@ import { GROUND_Y } from './crane';
 import { containerGeometry, containerMaterial, containerMesh } from './containers';
 import { buildSailboat } from './ship';
 import { Town } from './town';
+import { RTGS, RTG_BOXES, STACK_PITCH, isRtgStack, rtgWork, yardX, yardZ } from './yard';
 import { box, gableRoof, glowSprite, hash, mat, strut } from './util';
 
 /** Floodlight masts, centre-out, so the first few light the berth. */
@@ -60,9 +61,6 @@ export const BUOYS = [
   { x: 205, z: -66, colour: 0x22c55e },
 ] as const;
 
-/** Yard gantry i's position along the yard at scenery time t. */
-export const rtgX = (i: number, t: number) => (i ? 62 : -62) + Math.sin(t * 0.07 + i * 2) * 50;
-
 /**
  * Everything on land plus the fixed things in the water: quay, container
  * yard, sheds, the town, hills, breakwater and lighthouse. Upgrade-driven
@@ -88,7 +86,15 @@ export class PortLand {
   private town!: Town;
   private readonly buoys: { g: THREE.Group; x: number; z: number; light: THREE.Sprite; phase: number }[] = [];
   private readonly trucks: THREE.Group[] = [];
-  private readonly rtgs: THREE.Group[] = [];
+  private readonly rtgs: {
+    g: THREE.Group;
+    trolley: THREE.Group;
+    rope: THREE.Mesh;
+    spreader: THREE.Group;
+    carried: THREE.Mesh;
+    boxes: THREE.InstancedMesh;
+    state: string;
+  }[] = [];
   private readonly boats: { g: THREE.Group; cx: number; cz: number; rx: number; rz: number; speed: number; phase: number }[] = [];
   private readonly gulls: { g: THREE.Group; wl: THREE.Group; wr: THREE.Group; r: number; h: number; speed: number; phase: number; cx: number; cz: number }[] = [];
 
@@ -202,10 +208,11 @@ export class PortLand {
     const items: (Instance & { k: number })[] = [];
     for (let col = 0; col < 39; col++) {
       if (col % 7 === 6) continue; // lanes
-      const x = -122 + col * 6.4;
+      const x = yardX(col);
       for (let row = 0; row < 14; row++) {
         if (row % 5 === 4) continue;
-        const z = 32 + row * 3.2;
+        if (isRtgStack(col, row)) continue; // the gantries' own stacks (yard.ts)
+        const z = yardZ(row);
         const seed = col * 31 + row * 7;
         const k = hash(seed);
         const height = 1 + Math.floor(hash(seed + 5) * 4);
@@ -508,18 +515,66 @@ export class PortLand {
 
   private buildRtgs() {
     const yellow = mat(0xffc233, { roughness: 0.5 });
-    for (let i = 0; i < 2; i++) {
+    const steel = mat(0x3b4452, { roughness: 0.6 });
+    RTGS.forEach((rtg) => {
       const g = new THREE.Group();
       // Legs stand in the lanes either side of a four-row block.
       for (const x of [-2, 2]) for (const z of [-7.8, 7.8]) g.add(box(0.9, 16, 0.9, yellow, x, 8, z));
       for (const x of [-2, 2]) g.add(box(0.9, 1.4, 16.6, yellow, x, 16.5, 0));
       g.add(box(4.8, 1.2, 1, yellow, 0, 16.5, -7.8));
       g.add(box(4.8, 1.2, 1, yellow, 0, 16.5, 7.8));
-      g.add(box(3.6, 2, 3.4, mat(0xffffff), 0, 15, 3));
-      g.position.set(0, GROUND_Y, i ? 52.8 : 36.8);
-      this.rtgs.push(g);
+      // Trolley across the top, hoist ropes, spreader and the box it lifts.
+      const trolley = new THREE.Group();
+      trolley.add(box(3.6, 2, 3.4, mat(0xffffff), 0, 15, 0));
+      const rope = box(0.12, 1, 0.12, steel, 0, 0, 0);
+      rope.geometry.translate(0, -0.5, 0);
+      rope.position.y = 14;
+      trolley.add(rope);
+      const spreader = new THREE.Group();
+      spreader.add(box(6.2, 0.35, 2.5, yellow, 0, 0.18, 0));
+      spreader.add(box(1.2, 0.5, 1.2, yellow, 0, 0.6, 0));
+      const carried = containerMesh(0xffffff);
+      carried.position.y = -1.25;
+      spreader.add(carried);
+      trolley.add(spreader);
+      g.add(trolley);
+      g.position.set(0, GROUND_Y, rtg.z);
       this.group.add(g);
+      // Its stacks' boxes, drawn in the yard.
+      const boxes = new THREE.InstancedMesh(containerGeometry(), containerMaterial(), rtg.stacks.length * RTG_BOXES);
+      boxes.castShadow = true;
+      boxes.receiveShadow = true;
+      this.group.add(boxes);
+      this.rtgs.push({ g, trolley, rope, spreader, carried, boxes, state: '' });
+    });
+  }
+
+  /** Put a gantry where yard.ts says, with its boxes. */
+  private updateRtg(i: number, t: number) {
+    const r = this.rtgs[i];
+    const w = rtgWork(i, t);
+    r.g.position.x = w.x;
+    r.trolley.position.z = w.z - RTGS[i].z;
+    r.spreader.position.y = w.under;
+    r.rope.scale.y = Math.max(0.05, 14 - (w.under + 0.85));
+    r.carried.visible = w.carrying !== null;
+    if (w.carrying !== null) (r.carried.material as THREE.MeshStandardMaterial).color.setHex(w.carrying);
+    const state = w.stacks.map((s) => s.boxes.join('.')).join('|');
+    if (state === r.state) return;
+    r.state = state;
+    const m = new THREE.Matrix4();
+    const c = new THREE.Color();
+    let n = 0;
+    for (const s of w.stacks) {
+      s.boxes.forEach((colour, h) => {
+        r.boxes.setMatrixAt(n, m.makeTranslation(yardX(s.col), GROUND_Y + 1.27 + h * STACK_PITCH, yardZ(s.row)));
+        r.boxes.setColorAt(n, c.setHex(colour));
+        n++;
+      });
     }
+    r.boxes.count = n;
+    r.boxes.instanceMatrix.needsUpdate = true;
+    if (r.boxes.instanceColor) r.boxes.instanceColor.needsUpdate = true;
   }
 
   private buildBoats() {
@@ -624,11 +679,10 @@ export class PortLand {
       placeOnLoop(g, d);
     });
 
-    // The two yard gantries work neighbouring blocks and share the lane
-    // between them, so each keeps to its own half of the yard.
-    this.rtgs.forEach((g, i) => {
-      g.position.x = rtgX(i, t);
-    });
+    // The yard gantries shuffle boxes between their stacks (yard.ts). They
+    // work neighbouring blocks and share the lane between, so each keeps to
+    // its own half of the yard.
+    this.rtgs.forEach((_, i) => this.updateRtg(i, t));
 
     for (const b of this.buoys) {
       b.g.position.y = heightAt(b.x, b.z) - 0.4;
