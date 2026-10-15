@@ -3,12 +3,13 @@ import type { DerivedStats, PortState } from '../../sim/types';
 import { skyAt, timeOfDay, type Sky } from '../port/daylight';
 import { containerRows, craneCount, shipScale } from '../port/geometry';
 import { berthMoment } from '../port/timeline';
-import { Crane } from './crane';
+import { berthWork, slotColour, slotKey, variantOf } from './cargo';
+import { Crane, HOIST_TOP, PARK_Z, pileSpot, type SpotResolver } from './crane';
 import { CruiseTerminal, Dredger, RailLink, TallShip } from './expansions';
 import { liveryFor } from './palette';
 import { PortLand } from './port';
 import { berthZ as berthZOf, shipsAt, tugCount, tugsAt } from './berthing';
-import { DECK_Y, HULL_BEAM, HULL_LENGTH, ShipModel, buildTug } from './ship';
+import { BOX_HEIGHT, DECK_Y, HULL_BEAM, HULL_LENGTH, ShipModel, buildTug, slotCentre } from './ship';
 import { SeaLife, type Sighting } from './sealife';
 import { SkyLayer } from './sky';
 import { disposeTree } from './util';
@@ -70,6 +71,7 @@ export class HarbourWorld {
   private lastSighting = -99;
   private readonly tmp = new THREE.Vector3();
   private readonly tmp2 = new THREE.Vector3();
+  private readonly emptyBerth = new THREE.Vector3();
   private readonly towlines: THREE.Mesh[] = [];
 
   /** Seconds of scenery time. Kept small so shader floats stay precise. */
@@ -150,8 +152,9 @@ export class HarbourWorld {
     if (shipKey !== this.shipKey || !this.ships) {
       this.disposeShips();
       this.ships = [
-        new ShipModel(livery, tiers, this.land.windowMat, portIndex),
-        new ShipModel(livery, tiers, this.land.windowMat, portIndex + 3),
+        // Ship k sails as model k % 2, with that model's load of boxes.
+        new ShipModel(livery, tiers, this.land.windowMat, portIndex, (s) => slotColour(variantOf(portIndex, 0), s), slotKey),
+        new ShipModel(livery, tiers, this.land.windowMat, portIndex + 3, (s) => slotColour(variantOf(portIndex, 1), s), slotKey),
       ];
       this.ships.forEach((sh) => this.scene.add(sh.group));
       this.shipKey = shipKey;
@@ -162,7 +165,10 @@ export class HarbourWorld {
     const poses = shipsAt(seconds, scale);
     const models = this.ships;
     models.forEach((sh) => (sh.group.visible = false));
-    let moored: { model: ShipModel; cargo: number } | null = null;
+    // What the cranes are doing with the cargo (cargo.ts): which boxes are
+    // off the ship, on the quay or in the air.
+    const count = craneCount(up.cranes);
+    const work = berthWork(seconds, { scale, tiers, craneLevel: up.cranes, count, port: portIndex });
     const byIndex = new Map<number, ShipModel>();
     for (const pose of poses) {
       // Each ship keeps one model for her whole life, so nothing swaps mid-move.
@@ -174,11 +180,10 @@ export class HarbourWorld {
       const phase = pose.index * 1.7;
       g.position.set(pose.x, this.water.heightAt(pose.x, pose.z, t) * 0.5 + Math.sin(t * 0.9 + phase) * 0.15, pose.z);
       g.rotation.set(Math.sin(t * 0.7 + phase) * 0.012, pose.yaw, Math.sin(t * 1.1 + phase) * 0.01);
-      model.setCargo(pose.cargo);
+      model.setSlots(work.slotsOf(pose.index));
       model.setWake(Math.min(1, pose.speed / 18 + pose.sideways / 3));
       model.setNight(sky.lamps);
       model.animate(t);
-      if (pose.phase === 'moored') moored = { model, cargo: pose.cargo };
     }
     models.forEach((sh, slot) => this.wakeFor(slot, sh, scale));
     const berthZ = berthZOf(scale);
@@ -222,24 +227,29 @@ export class HarbourWorld {
     });
 
     // --- cranes ----------------------------------------------------------------
-    const count = craneCount(up.cranes);
     const craneKey = `${portIndex}:${count}`;
     if (craneKey !== this.craneKey) {
       this.cranes.forEach((c) => {
         this.craneGroup.remove(c.group);
         disposeTree(c.group);
       });
-      this.cranes = Array.from({ length: count }, (_, i) => new Crane(livery.crane, portIndex * 3 + i));
+      this.cranes = Array.from({ length: count }, () => new Crane(livery.crane));
       this.cranes.forEach((c) => this.craneGroup.add(c.group));
       this.craneKey = craneKey;
     }
-    // Cranes run on rails, so they spread along whatever hull is alongside.
-    const span = Math.max(52 * scale, count * 15);
-    const craneSpeed = (0.5 + up.cranes * 0.035) * 0.55;
-    const pickY = moored ? moored.model.group.position.y + moored.model.cargoTopY(moored.cargo) * scale : 0;
+    // Each crane stands over the bay she works; the ship at the berth (or
+    // where she will be) gives the slots' positions.
+    const worked = byIndex.get(work.ship);
+    const shipPos = worked ? worked.group.position : this.emptyBerth.set(0, 0, berthZ);
+    const at: SpotResolver = (spot) => {
+      if (spot.on === 'park') return { z: PARK_Z, y: HOIST_TOP };
+      if (spot.on === 'pile') return pileSpot(spot.row, spot.tier, scale);
+      const c = slotCentre(spot.slot);
+      return { z: shipPos.z + c.z * scale, y: shipPos.y + scale * (c.y + BOX_HEIGHT / 2) };
+    };
     this.cranes.forEach((c, i) => {
-      c.group.position.x = 2 * scale - span / 2 + span * ((i + 0.5) / count);
-      c.update(t * craneSpeed + i * 0.37, !!moored && moored.cargo > 0.02, berthZ, pickY, sky.lamps);
+      c.group.position.x = work.cranes[i].x;
+      c.update(work.cranes[i], at, scale, sky.lamps);
     });
 
     // --- payout ----------------------------------------------------------------

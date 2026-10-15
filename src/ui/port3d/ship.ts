@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { CONTAINER, containerGeometry, containerMaterial } from './containers';
 import { BAY_XS, CARGO_DECK, SHIP_POINTS, buildContainerShip, buildTug as tugModel, buildYacht, shipHalfBreadth } from './models/ships';
-import { CONTAINERS, type Livery } from './palette';
+import type { Livery } from './palette';
 import { glow, glowSprite, hash, textTexture } from './util';
 
 /** Unscaled hull dimensions. The whole ship group is scaled by shipScale(). */
@@ -12,10 +12,25 @@ export const BOX_LENGTH = CONTAINER.length;
 export const BOX_HEIGHT = CONTAINER.height;
 export const BOX_WIDTH = CONTAINER.width;
 
+const HIDDEN = new THREE.Matrix4().makeScale(0, 0, 0);
+
 const SHIP_NAMES = ['HARBOUR STAR', 'SALTMERE SPIRIT', 'KESTREL WAVE', 'BLUE MERIDIAN', 'CORAL EXPRESS', 'NORTHERN GLORY'];
 
-/** Containers across the beam in each bay. */
-const ACROSS = 4;
+/** Containers across the beam in each bay, and their spacing (unscaled). */
+export const ACROSS = 4;
+export const ACROSS_PITCH = BOX_WIDTH + 0.1;
+
+/** A deck slot: bay along the ship, `a` across (0 = seaward), tier up. */
+export interface DeckSlot {
+  bay: number;
+  a: number;
+  tier: number;
+}
+
+/** Ship-local centre of the box in a deck slot. */
+export function slotCentre(s: DeckSlot): THREE.Vector3 {
+  return new THREE.Vector3(BAY_XS[s.bay], CARGO_DECK.y + BOX_HEIGHT * (s.tier + 0.5), (s.a - (ACROSS - 1) / 2) * ACROSS_PITCH);
+}
 
 // ---------------------------------------------------------------------------
 // The container ship
@@ -25,8 +40,8 @@ const ACROSS = 4;
  * A container ship (models/ships.ts) in the port's livery, plus what only
  * the game needs: her name on the bows, navigation lights, funnel smoke and
  * the cargo. Built once per livery and deck height, then only moved, bobbed
- * and unloaded — the containers are one instanced mesh whose visible count
- * tracks the cargo still aboard.
+ * and worked — the containers are one instanced mesh, and the cranes take
+ * boxes out of (and put boxes into) individual slots through `setSlots`.
  */
 export class ShipModel {
   readonly group = new THREE.Group();
@@ -34,13 +49,25 @@ export class ShipModel {
   /** 0..1, how hard she is churning the water; the sea draws the wake. */
   wake = 0;
   private readonly containers: THREE.InstancedMesh;
-  private readonly total: number;
+  private readonly slots: { key: number; m: THREE.Matrix4; colour: number }[] = [];
+  private slotState = '';
   private readonly navLights: THREE.Sprite[] = [];
   private readonly radar: THREE.Object3D;
   private readonly propeller: THREE.Object3D;
   private readonly smoke: THREE.Sprite[] = [];
 
-  constructor(livery: Livery, tiers: number, windowMaterial: THREE.Material, nameIndex = 0) {
+  /**
+   * @param colourOf colour of the box each deck slot arrives with
+   * @param keyOf    the slot's key, as the caller names slots in `setSlots`
+   */
+  constructor(
+    livery: Livery,
+    tiers: number,
+    windowMaterial: THREE.Material,
+    nameIndex: number,
+    colourOf: (s: DeckSlot) => number,
+    keyOf: (s: DeckSlot) => number,
+  ) {
     this.tiers = tiers;
     const g = this.group;
 
@@ -94,42 +121,42 @@ export class ShipModel {
     }
 
     // --- containers ---------------------------------------------------------------
-    // Ordered bottom tier first so trimming the instance count takes boxes off
-    // the top of the stacks, the way cranes actually work.
-    this.total = BAY_XS.length * ACROSS * tiers;
-    this.containers = new THREE.InstancedMesh(containerGeometry(), containerMaterial(), this.total);
+    const total = BAY_XS.length * ACROSS * tiers;
+    this.containers = new THREE.InstancedMesh(containerGeometry(), containerMaterial(), total);
     this.containers.castShadow = true;
     this.containers.receiveShadow = true;
-    const m = new THREE.Matrix4();
     const rot = new THREE.Matrix4();
-    const c = new THREE.Color();
-    let i = 0;
     for (let tier = 0; tier < tiers; tier++) {
-      const slots: [number, number][] = [];
-      for (let bay = 0; bay < BAY_XS.length; bay++) for (let a = 0; a < ACROSS; a++) slots.push([bay, a]);
-      slots.sort((p, q) => hash(p[0] * 7 + p[1] + tier * 31) - hash(q[0] * 7 + q[1] + tier * 31));
-      for (const [bay, a] of slots) {
-        m.makeTranslation(BAY_XS[bay], CARGO_DECK.y + BOX_HEIGHT * (tier + 0.5), (a - (ACROSS - 1) / 2) * (BOX_WIDTH + 0.1));
-        // Doors face aft on most boxes, forward on a few, as stowed.
-        if (hash(i * 5.1 + bay) > 0.8) m.multiply(rot.makeRotationY(Math.PI));
-        this.containers.setMatrixAt(i, m);
-        c.setHex(CONTAINERS[Math.floor(hash(i * 3.7 + bay) * CONTAINERS.length)]);
-        this.containers.setColorAt(i, c);
-        i++;
+      for (let bay = 0; bay < BAY_XS.length; bay++) {
+        for (let a = 0; a < ACROSS; a++) {
+          const slot = { bay, a, tier };
+          const m = new THREE.Matrix4().setPosition(slotCentre(slot));
+          // Doors face aft on most boxes, forward on a few, as stowed.
+          if (hash(bay * 5.1 + a * 1.7 + tier * 3.3) > 0.8) m.multiply(rot.makeRotationY(Math.PI));
+          this.slots.push({ key: keyOf(slot), m, colour: colourOf(slot) });
+        }
       }
     }
+    this.setSlots(new Map());
     g.add(this.containers);
   }
 
-  /** 0..1 of the cargo still aboard. */
-  setCargo(fraction: number) {
-    this.containers.count = Math.max(0, Math.min(this.total, Math.round(fraction * this.total)));
-  }
-
-  /** Top of the remaining cargo, in local units — where the spreader lands. */
-  cargoTopY(fraction: number): number {
-    const tiersLeft = Math.ceil(fraction * this.tiers);
-    return CARGO_DECK.y + Math.max(0, tiersLeft) * BOX_HEIGHT;
+  /**
+   * Slots that differ from how she arrived: null = empty, else the colour of
+   * the box now there. Cheap to call every frame; only redraws on change.
+   */
+  setSlots(changed: Map<number, number | null>) {
+    const state = [...changed].map(([k, v]) => `${k}:${v}`).join(',') || 'as arrived';
+    if (state === this.slotState) return;
+    this.slotState = state;
+    const c = new THREE.Color();
+    this.slots.forEach((s, i) => {
+      const v = changed.has(s.key) ? changed.get(s.key)! : s.colour;
+      this.containers.setMatrixAt(i, v === null ? HIDDEN : s.m);
+      this.containers.setColorAt(i, c.setHex(v ?? s.colour));
+    });
+    this.containers.instanceMatrix.needsUpdate = true;
+    if (this.containers.instanceColor) this.containers.instanceColor.needsUpdate = true;
   }
 
   setWake(strength: number) {

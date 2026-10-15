@@ -47,6 +47,23 @@ const trs = (x: number, y: number, z: number, sx: number, sy: number, sz: number
   );
 
 /**
+ * Channel buoys marking the ships' lane in and out: red on the quay side,
+ * green to seaward (clear of the VIP tall ship's lane further out), and the
+ * east pair beyond the cruise liner's berth.
+ */
+export const BUOYS = [
+  { x: -140, z: -15, colour: 0xff3b3b },
+  { x: -260, z: -16, colour: 0xff3b3b },
+  { x: -140, z: -64, colour: 0x22c55e },
+  { x: -260, z: -66, colour: 0x22c55e },
+  { x: 205, z: -15, colour: 0xff3b3b },
+  { x: 205, z: -66, colour: 0x22c55e },
+] as const;
+
+/** Yard gantry i's position along the yard at scenery time t. */
+export const rtgX = (i: number, t: number) => (i ? 62 : -62) + Math.sin(t * 0.07 + i * 2) * 50;
+
+/**
  * Everything on land plus the fixed things in the water: quay, container
  * yard, sheds, the town, hills, breakwater and lighthouse. Upgrade-driven
  * pieces (floodlights, customs house, yard fill) are built once and toggled.
@@ -376,15 +393,7 @@ export class PortLand {
   }
 
   private buildBuoys() {
-    const spots = [
-      [-140, -36, 0xff3b3b],
-      [-260, -38, 0xff3b3b],
-      [-140, -64, 0x22c55e],
-      [-260, -66, 0x22c55e],
-      [160, -40, 0xff3b3b],
-      [160, -66, 0x22c55e],
-    ] as const;
-    spots.forEach(([x, z, c], i) => {
+    BUOYS.forEach(({ x, z, colour: c }, i) => {
       const g = new THREE.Group();
       const m = mat(c, { roughness: 0.5 });
       const body = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.6, 3, 10), m);
@@ -615,8 +624,10 @@ export class PortLand {
       placeOnLoop(g, d);
     });
 
+    // The two yard gantries work neighbouring blocks and share the lane
+    // between them, so each keeps to its own half of the yard.
     this.rtgs.forEach((g, i) => {
-      g.position.x = Math.sin(t * 0.07 + i * 2) * 110;
+      g.position.x = rtgX(i, t);
     });
 
     for (const b of this.buoys) {
