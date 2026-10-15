@@ -126,6 +126,11 @@ export class SkyLayer {
     }
   }
 
+  /** Clouds only where there is weather. */
+  setClouds(on: boolean) {
+    this.clouds.forEach((c) => (c.visible = on));
+  }
+
   update(sky: SkyState, tod: number, dt: number, camera: THREE.Camera) {
     this.uniforms.uZenith.value.setHex(sky.zenith);
     this.uniforms.uHorizon.value.setHex(sky.horizon);

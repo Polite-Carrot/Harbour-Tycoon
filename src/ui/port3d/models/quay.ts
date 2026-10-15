@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { M, Part, V, beam, bmm, box, ecyl, railing, range, rod, tf, xcyl, zcyl } from './kit';
+import { M, Part, V, beam, bmm, box, ecyl, paint, railing, range, rod, tf, xcyl, zcyl } from './kit';
 
 /**
  * Quay equipment, to the Harbour Tycoon model spec: +Y up, origin at the
@@ -66,6 +66,43 @@ export function buildContainer(): THREE.Group {
   const root = new THREE.Group();
   root.name = 'Container20ft';
   root.add(p.build('Container'));
+  return root;
+}
+
+/**
+ * A treasure chest the size of a twenty-footer, so it stacks and swings
+ * exactly like one: wooden body, a rounded lid, metal bands and a lock.
+ * Vertex-coloured (wood darker than the bands) under one white material,
+ * so per-instance tints paint it.
+ */
+export function buildChest(): THREE.Group {
+  const w = M('ChestPaint', 0xffffff, 0.7, 0.1, { vertexColors: true });
+  const p = new Part();
+  const L = CONTAINER.length;
+  const H = CONTAINER.height;
+  const D = CONTAINER.width;
+  const wood = 0x9e735a;
+  const metal = 0xfff0c0;
+  const r = D / 2;
+  const bodyH = H - r;
+  p.add(w, paint(box(L - 0.1, bodyH, D - 0.06, 0, -H / 2 + bodyH / 2, 0), wood));
+  const lid = new THREE.CylinderGeometry(r - 0.03, r - 0.03, L - 0.1, 16, 1, false, 0, Math.PI);
+  lid.rotateZ(Math.PI / 2);
+  lid.rotateX(-Math.PI / 2);
+  lid.translate(0, -H / 2 + bodyH, 0);
+  p.add(w, paint(lid, wood));
+  for (const x of [-L / 2 + 0.4, -L / 6, L / 6, L / 2 - 0.4]) {
+    p.add(w, paint(box(0.3, bodyH + 0.04, D + 0.02, x, -H / 2 + bodyH / 2, 0), metal));
+    const band = new THREE.CylinderGeometry(r + 0.02, r + 0.02, 0.3, 16, 1, true, 0, Math.PI);
+    band.rotateZ(Math.PI / 2);
+    band.rotateX(-Math.PI / 2);
+    band.translate(x, -H / 2 + bodyH, 0);
+    p.add(w, paint(band, metal));
+  }
+  p.add(w, paint(box(0.12, 0.6, 0.6, -L / 2 - 0.02, -H / 2 + bodyH - 0.2, 0), metal));
+  const root = new THREE.Group();
+  root.name = 'TreasureChest';
+  root.add(p.build('Chest'));
   return root;
 }
 

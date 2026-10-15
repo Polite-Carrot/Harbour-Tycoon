@@ -54,13 +54,47 @@ function armsGeometry(): THREE.BufferGeometry {
   return mergeGeometries(parts.map((g) => (g.index ? g.toNonIndexed() : g)), false)!;
 }
 
-const crowns: Record<TreeKind, () => THREE.BufferGeometry> = {
+/** Kelp blades: long thin leaves streaming up from the stem, unit size. */
+function bladesGeometry(): THREE.BufferGeometry {
+  const parts: THREE.BufferGeometry[] = [];
+  for (let i = 0; i < 5; i++) {
+    const blade = new THREE.BoxGeometry(0.06, 1, 0.28);
+    blade.translate(0, 0.5, 0);
+    blade.rotateZ((i - 2) * 0.22);
+    blade.rotateY(i * 1.3);
+    parts.push(blade);
+  }
+  return mergeGeometries(parts.map((g) => (g.index ? g.toNonIndexed() : g)), false)!;
+}
+
+/** Branching coral: a fan of knobbly fingers, unit size. */
+function coralGeometry(): THREE.BufferGeometry {
+  const parts: THREE.BufferGeometry[] = [];
+  for (let i = 0; i < 7; i++) {
+    const a = (i / 7) * Math.PI * 2;
+    const lean = 0.35 + hash(i) * 0.4;
+    const finger = new THREE.CylinderGeometry(0.09, 0.14, 1, 5);
+    finger.translate(0, 0.5, 0);
+    finger.rotateZ(lean);
+    finger.rotateY(a);
+    parts.push(finger);
+    const tip = new THREE.SphereGeometry(0.15, 5, 4);
+    tip.translate(-Math.sin(lean), Math.cos(lean), 0);
+    tip.rotateY(a);
+    parts.push(tip);
+  }
+  return mergeGeometries(parts.map((g) => (g.index ? g.toNonIndexed() : g)), false)!;
+}
+
+const crowns: Record<Exclude<TreeKind, 'none'>, () => THREE.BufferGeometry> = {
   broadleaf: () => new THREE.IcosahedronGeometry(1, 1),
   pine: () => new THREE.ConeGeometry(1, 1, 7),
   palm: frondGeometry,
   cactus: armsGeometry,
   cypress: () => new THREE.IcosahedronGeometry(1, 1),
   acacia: () => new THREE.IcosahedronGeometry(1, 1),
+  kelp: bladesGeometry,
+  coral: coralGeometry,
 };
 
 export interface Trees {
@@ -110,6 +144,20 @@ export function trees(kind: TreeKind, leaves: readonly number[], trunkColour: nu
           tops.push({ m: trs(x, y + h, z, h * 0.9, h, h * 0.9, spin), c: leaf(seed) });
           break;
         }
+        case 'none':
+          break;
+        case 'kelp': {
+          const h = (4 + r(0) * 5) * size;
+          trunks.push({ m: trs(x, y + h / 2, z, 0.18, h, 0.18, spin, (r(2) - 0.5) * 0.2), c: trunkColour });
+          tops.push({ m: trs(x, y + h * 0.7, z, size * 1.4, h * 0.6, size * 1.4, spin), c: leaf(seed) });
+          break;
+        }
+        case 'coral': {
+          const s = (1.6 + r(1) * 1.6) * size;
+          trunks.push({ m: trs(x, y + 0.3 * size, z, 1.6 * size, 0.6 * size, 1.6 * size), c: 0xe9dcc0 });
+          tops.push({ m: trs(x, y + 0.5 * size, z, s, s * 1.2, s, spin), c: leaf(seed) });
+          break;
+        }
         case 'acacia': {
           // A tall bare trunk and a wide, flat umbrella of a crown.
           const h = (3.6 + r(0) * 2) * size;
@@ -129,7 +177,7 @@ export function trees(kind: TreeKind, leaves: readonly number[], trunkColour: nu
       }
     },
     build(group) {
-      if (!trunks.length) return;
+      if (!trunks.length || kind === 'none') return;
       const add = (geo: THREE.BufferGeometry, material: THREE.Material, items: Instance[]) => {
         const mesh = new THREE.InstancedMesh(geo, material, items.length);
         const c = new THREE.Color();
@@ -143,7 +191,7 @@ export function trees(kind: TreeKind, leaves: readonly number[], trunkColour: nu
       };
       const trunkGeo = kind === 'cactus' ? new THREE.CylinderGeometry(0.42, 0.48, 1, 8) : new THREE.CylinderGeometry(0.35, 0.5, 1, 6);
       add(trunkGeo, mat(0xffffff, { roughness: 0.8 }), trunks);
-      add(crowns[kind](), mat(0xffffff, { flatShading: true, roughness: 0.8 }), tops);
+      add(crowns[kind as Exclude<TreeKind, 'none'>](), mat(0xffffff, { flatShading: true, roughness: 0.8 }), tops);
     },
   };
 }

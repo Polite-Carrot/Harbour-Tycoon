@@ -1,6 +1,7 @@
 import type * as THREE from 'three';
 import { buildDolphin, buildFish, buildShark, buildWhale } from './animals';
-import { buildContainer, buildCrane } from './quay';
+import { buildChest, buildContainer, buildCrane } from './quay';
+import { buildDrone, buildFreighter, buildGalleon, buildMiniSub, buildSubmarine } from './vessels';
 import { buildContainerShip, buildLiner, buildTallShip, buildTug, buildYacht } from './ships';
 
 /**
@@ -30,6 +31,13 @@ export const MODELS: readonly ModelEntry[] = [
   { id: 'sailing_yacht', label: 'Sailing yacht', budget: null, build: () => buildYacht() },
   { id: 'cruise_liner', label: 'Cruise liner', budget: null, build: () => buildLiner() },
   { id: 'tall_ship', label: 'Tall ship', budget: null, build: buildTallShip },
+  // The fun ports' vessels and cargo.
+  { id: 'galleon', label: 'Galleon', budget: 15000, build: () => buildGalleon(), moving: ['Radar', 'Propeller'] },
+  { id: 'space_freighter', label: 'Space freighter', budget: 15000, build: () => buildFreighter(), moving: ['Radar', 'Propeller'] },
+  { id: 'cargo_submarine', label: 'Cargo submarine', budget: 15000, build: () => buildSubmarine(), moving: ['Radar', 'Propeller'] },
+  { id: 'tug_drone', label: 'Tug drone', budget: 4000, build: () => buildDrone() },
+  { id: 'tug_minisub', label: 'Mini-sub tug', budget: 4000, build: () => buildMiniSub() },
+  { id: 'treasure_chest', label: 'Treasure chest', budget: 800, build: buildChest },
 ];
 
 /** Triangles across every mesh under a node. */

@@ -28,14 +28,14 @@ const tallest = (land: PortLand) => {
 };
 
 describe('port settings', () => {
-  it('a distinct setting for each of the ten ports, wrapping after that', () => {
+  it('a distinct setting for every port, wrapping after the last', () => {
     expect(THEMES).toHaveLength(BALANCE.ports.maxPorts);
     expect(BALANCE.ports.names).toHaveLength(BALANCE.ports.maxPorts);
     expect(new Set(THEMES.map((t) => t.id)).size).toBe(THEMES.length);
     expect(themeFor(0).id).toBe('temperate');
     expect(themeFor(1).id).toBe('desert');
     expect(themeFor(2).id).toBe('metropolis');
-    expect(themeFor(11)).toBe(themeFor(1));
+    expect(themeFor(BALANCE.ports.maxPorts + 1)).toBe(themeFor(1));
   });
 
   it('every square has its own centrepiece, and it builds', () => {

@@ -217,6 +217,100 @@ const builders: Record<Centrepiece, (g: THREE.Group, theme: Theme) => Omit<Centr
     return { spray: false, ...still() };
   },
 
+  treasure(g) {
+    // A heap of gold round an open chest, a cannon and barrels.
+    const gold = mat(0xf2c037, { roughness: 0.25, metalness: 0.6 });
+    put(g, new THREE.SphereGeometry(3, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2), gold, 0, 0, 0).scale.y = 0.45;
+    for (let i = 0; i < 30; i++) {
+      const a = hash(i) * Math.PI * 2;
+      const r = 2.6 + hash(i * 3) * 1.8;
+      put(g, new THREE.CylinderGeometry(0.28, 0.28, 0.08, 10), gold, Math.cos(a) * r, 0.05, Math.sin(a) * r, hash(i * 5) * 0.5, 0, hash(i * 7) * 0.5);
+    }
+    const wood = mat(0x7a4e30, { roughness: 0.8 });
+    const band = mat(0xd4a017, { roughness: 0.3, metalness: 0.6 });
+    put(g, new THREE.BoxGeometry(2.6, 1.4, 1.8), wood, 0, 1.6, 0);
+    put(g, new THREE.BoxGeometry(2.7, 0.2, 1.9), band, 0, 1.6, 0);
+    put(g, new THREE.CylinderGeometry(0.9, 0.9, 2.6, 12, 1, false, 0, Math.PI), wood, 0, 2.5, -0.9, 0, 0, Math.PI / 2).rotation.x = -0.9;
+    for (let i = 0; i < 7; i++) put(g, new THREE.SphereGeometry(0.3, 8, 6), [gold, mat(0xe03131, { roughness: 0.2 }), mat(0x1c7ed6, { roughness: 0.2 })][i % 3], -0.9 + (i % 4) * 0.6, 2.35, -0.4 + Math.floor(i / 4) * 0.6);
+    const iron = mat(0x2b2d31, { roughness: 0.5, metalness: 0.5 });
+    put(g, new THREE.CylinderGeometry(0.35, 0.5, 3.4, 12), iron, 3.6, 1.1, 2.4, 0, 0.6, Math.PI / 2 - 0.2);
+    for (const dz of [-0.7, 0.7]) put(g, new THREE.CylinderGeometry(0.6, 0.6, 0.2, 10), wood, 3.4, 0.6, 2.4 + dz, Math.PI / 2, 0, 0);
+    for (const [x, z] of [[-3.8, 2.6], [-4.2, 1], [-3.2, -3.4]]) put(g, new THREE.CylinderGeometry(0.75, 0.75, 1.6, 12), wood, x, 0.8, z);
+    return { spray: false, ...still() };
+  },
+
+  clam(g) {
+    // A giant clam, open, with a glowing pearl, and an anchor in the sand.
+    const shell = mat(0xe8d9f2, { roughness: 0.4 });
+    const inside = mat(0xffc9de, { roughness: 0.3 });
+    put(g, new THREE.SphereGeometry(3.4, 24, 10, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), shell, 0, 1.2, 0).scale.y = 0.5;
+    put(g, new THREE.CircleGeometry(3.2, 24), inside, 0, 1.22, 0, -Math.PI / 2);
+    const lid = put(g, new THREE.SphereGeometry(3.4, 24, 10, 0, Math.PI * 2, 0, Math.PI / 2), shell, 0, 1.2, -0.2);
+    lid.scale.y = 0.5;
+    lid.rotation.x = -0.9;
+    lid.position.z = -1.6;
+    lid.position.y = 1.8;
+    const pearl = put(g, new THREE.SphereGeometry(0.9, 20, 14), mat(0xffffff, { roughness: 0.1, emissive: 0xd0f4ff, emissiveIntensity: 0.5 }), 0, 2, 0.4);
+    const glow = glowSprite(0xd0f4ff, 6);
+    glow.position.copy(pearl.position);
+    g.add(glow);
+    const iron = mat(0x5c5f66, { roughness: 0.7, metalness: 0.4 });
+    put(g, new THREE.BoxGeometry(0.45, 5, 0.45), iron, 3.2, 2.3, 3.2, 0, 0, 0.35);
+    put(g, new THREE.TorusGeometry(1.4, 0.22, 6, 16, Math.PI), iron, 4, 0.9, 3.2, 0, 0, Math.PI + 0.35);
+    put(g, new THREE.TorusGeometry(0.45, 0.12, 6, 12), iron, 2.4, 4.6, 3.2, 0, 0, 0.35);
+    return {
+      spray: false,
+      animate: (t) => {
+        glow.material.opacity = 0.55 + 0.25 * Math.sin(t * 1.5);
+        lid.rotation.x = -0.85 - Math.sin(t * 0.4) * 0.08;
+      },
+    };
+  },
+
+  lander(g) {
+    // A lunar lander on its four legs, and a flag that never waves.
+    const gold = mat(0xd9a63a, { roughness: 0.35, metalness: 0.6 });
+    const white = mat(0xf1f3f5, { roughness: 0.5 });
+    const grey = mat(0x868e96, { roughness: 0.6, metalness: 0.3 });
+    put(g, new THREE.CylinderGeometry(4.6, 4.8, 0.3, 24), mat(0x9a9a9a, { roughness: 1 }), 0, 0.15, 0);
+    put(g, new THREE.CylinderGeometry(1.8, 1.8, 1.6, 8), gold, 0, 3, 0);
+    put(g, new THREE.BoxGeometry(2.6, 1.8, 2.6), white, 0, 4.6, 0).rotation.y = Math.PI / 4;
+    put(g, new THREE.CylinderGeometry(0.8, 0.9, 0.9, 8), white, 0, 5.9, 0);
+    put(g, new THREE.CylinderGeometry(0.5, 0.9, 0.9, 10), grey, 0, 1.9, 0);
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+      const foot = new THREE.Vector3(Math.cos(a) * 3.4, 0.35, Math.sin(a) * 3.4);
+      const top = new THREE.Vector3(Math.cos(a) * 1.5, 2.8, Math.sin(a) * 1.5);
+      const leg = put(g, new THREE.CylinderGeometry(0.1, 0.1, foot.distanceTo(top), 6), grey, (foot.x + top.x) / 2, (foot.y + top.y) / 2, (foot.z + top.z) / 2);
+      leg.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), top.clone().sub(foot).normalize());
+      put(g, new THREE.CylinderGeometry(0.45, 0.5, 0.15, 10), grey, foot.x, 0.38, foot.z);
+    }
+    put(g, new THREE.CylinderGeometry(0.06, 0.06, 4.4, 6), white, 3.6, 2.5, -2.6);
+    put(g, new THREE.BoxGeometry(1.8, 1.1, 0.04), mat(0x1c7ed6, { roughness: 0.6 }), 4.5, 4.1, -2.6);
+    return { spray: false, ...still() };
+  },
+
+  hologram(g) {
+    // A projector throwing up a slowly turning hologram of a planet.
+    put(g, new THREE.CylinderGeometry(3, 3.6, 1, 8), mat(0x343a40, { roughness: 0.3, metalness: 0.6 }), 0, 0.5, 0);
+    put(g, new THREE.CylinderGeometry(1.2, 1.6, 0.4, 16), new THREE.MeshBasicMaterial({ color: 0x22e4ff }), 0, 1.15, 0);
+    const holo = new THREE.MeshBasicMaterial({ color: 0x22e4ff, wireframe: true, transparent: true, opacity: 0.75 });
+    const planet = put(g, new THREE.SphereGeometry(2.6, 18, 12), holo, 0, 5.4, 0);
+    const ring = put(g, new THREE.TorusGeometry(3.6, 0.06, 4, 48), new THREE.MeshBasicMaterial({ color: 0xff2fd6, transparent: true, opacity: 0.8 }), 0, 5.4, 0, Math.PI / 2 - 0.35);
+    const beam = put(g, new THREE.CylinderGeometry(2.6, 1.2, 4.2, 16, 1, true), new THREE.MeshBasicMaterial({ color: 0x22e4ff, transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false }), 0, 3.3, 0);
+    beam.castShadow = false;
+    planet.castShadow = false;
+    ring.castShadow = false;
+    return {
+      spray: false,
+      animate: (t) => {
+        planet.rotation.y = t * 0.5;
+        ring.rotation.z = t * 0.3;
+        holo.opacity = 0.6 + 0.2 * Math.sin(t * 7);
+      },
+    };
+  },
+
   spire(g) {
     // A dark glass spire ringed with neon that rises and falls.
     put(g, new THREE.CylinderGeometry(4.6, 5, 0.6, 6), mat(0x23263a, { roughness: 0.4, metalness: 0.4 }), 0, 0.3, 0);

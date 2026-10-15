@@ -12,7 +12,9 @@ import { berthZ as berthZOf, shipsAt, tugCount, tugsAt } from './berthing';
 import { BOX_HEIGHT, DECK_Y, HULL_BEAM, HULL_LENGTH, ShipModel, buildTug, slotCentre } from './ship';
 import { SeaLife, type Sighting } from './sealife';
 import { SkyLayer } from './sky';
-import { themeFor } from './theme';
+import { cargoOf, shipOf, themeFor, tugOf, worldOf, type Theme } from './theme';
+import { WORLDS, worldSky } from './worlds';
+import { setCargoStyle } from './containers';
 import { disposeTree, mat } from './util';
 import { Water } from './water';
 
@@ -116,6 +118,38 @@ export class HarbourWorld {
     }
   }
 
+  /**
+   * Arrive in a port with a different setting: rebuild the land around the
+   * quay, swap the tugs for the right kind, and set the sea, the air and
+   * the cargo for this world. Ships and cranes rebuild on their own, since
+   * they are keyed by port.
+   */
+  private enter(theme: Theme) {
+    const look = WORLDS[worldOf(theme)];
+    setCargoStyle(cargoOf(theme));
+    this.scene.remove(this.land.group);
+    disposeTree(this.land.group, [this.windowMat]);
+    this.land = new PortLand(theme, this.windowMat);
+    this.scene.add(this.land.group);
+    this.water.setTint(theme.water);
+    this.water.group.visible = look.sea;
+    this.sea.group.visible = look.seaLife;
+    this.skyLayer.setClouds(look.clouds);
+    this.fog.near = look.fog[0];
+    this.fog.far = look.fog[1];
+    this.tugs.forEach((tug, i) => {
+      this.scene.remove(tug);
+      disposeTree(tug, [this.windowMat]);
+      const next = buildTug(this.windowMat, tugOf(theme));
+      next.visible = false;
+      this.tugs[i] = next;
+      this.scene.add(next);
+    });
+    // Containers and chests are different shapes: build the cargo afresh.
+    this.shipKey = '';
+    this.craneKey = '';
+  }
+
   /** Phones get a smaller shadow map; the scene is otherwise identical. */
   setLowPower(low: boolean) {
     const size = low ? 1024 : 2048;
@@ -132,9 +166,15 @@ export class HarbourWorld {
     const { port, portIndex, stats, lastTickAt } = input;
     const up = port.upgrades;
 
+    // --- where we are ----------------------------------------------------------
+    // Each port has its own setting; the fun ones are not even at sea.
+    const theme = themeFor(portIndex);
+    if (theme !== this.land.theme) this.enter(theme);
+    const look = WORLDS[worldOf(theme)];
+
     // --- sky and light -------------------------------------------------------
     const tod = timeOfDay(now);
-    const sky = (this.sky = skyAt(tod));
+    const sky = (this.sky = worldSky(worldOf(theme), skyAt(tod)));
     this.skyLayer.update(sky, tod, dt, camera);
     this.fog.color.setHex(sky.horizon);
     this.hemi.color.setHex(sky.hemiSky);
@@ -145,15 +185,8 @@ export class HarbourWorld {
     this.keyLight.position.copy(this.keyLight.target.position).addScaledVector(this.skyLayer.lightDir, 600);
     this.water.update(t, sky, this.skyLayer.lightDir, sky.sunIntensity * this.skyLayer.lightHeight);
 
-    const heightAt = (x: number, z: number) => this.water.heightAt(x, z, t);
-    const theme = themeFor(portIndex);
-    if (theme !== this.land.theme) {
-      this.scene.remove(this.land.group);
-      disposeTree(this.land.group, [this.windowMat]);
-      this.land = new PortLand(theme, this.windowMat);
-      this.scene.add(this.land.group);
-      this.water.setTint(theme.water);
-    }
+    // No waves where there is no sea: vessels hold steady over the seabed or the void.
+    const heightAt = look.sea ? (x: number, z: number) => this.water.heightAt(x, z, t) : () => 0;
     this.land.update(t, sky.lamps, up, heightAt, tod);
 
     // --- ships -----------------------------------------------------------------
@@ -165,8 +198,8 @@ export class HarbourWorld {
       this.disposeShips();
       this.ships = [
         // Ship k sails as model k % 2, with that model's load of boxes.
-        new ShipModel(livery, tiers, this.windowMat, portIndex, (s) => slotColour(variantOf(portIndex, 0), s), slotKey),
-        new ShipModel(livery, tiers, this.windowMat, portIndex + 3, (s) => slotColour(variantOf(portIndex, 1), s), slotKey),
+        new ShipModel(livery, tiers, this.windowMat, portIndex, (s) => slotColour(variantOf(portIndex, 0), s), slotKey, shipOf(theme)),
+        new ShipModel(livery, tiers, this.windowMat, portIndex + 3, (s) => slotColour(variantOf(portIndex, 1), s), slotKey, shipOf(theme)),
       ];
       this.ships.forEach((sh) => this.scene.add(sh.group));
       this.shipKey = shipKey;
@@ -190,7 +223,7 @@ export class HarbourWorld {
       g.visible = true;
       g.scale.setScalar(scale);
       const phase = pose.index * 1.7;
-      g.position.set(pose.x, this.water.heightAt(pose.x, pose.z, t) * 0.5 + Math.sin(t * 0.9 + phase) * 0.15, pose.z);
+      g.position.set(pose.x, heightAt(pose.x, pose.z) * 0.5 + Math.sin(t * 0.9 + phase) * 0.15, pose.z);
       g.rotation.set(Math.sin(t * 0.7 + phase) * 0.012, pose.yaw, Math.sin(t * 1.1 + phase) * 0.01);
       model.setSlots(work.slotsOf(pose.index));
       model.setWake(Math.min(1, pose.speed / 18 + pose.sideways / 3));
@@ -207,6 +240,11 @@ export class HarbourWorld {
     this.rail.update(t, up.railLink, sky.lamps);
     this.dredger.update(t, up.dredging, heightAt);
     this.terminal.update(t, up.cruise, sky.lamps, heightAt);
+    // The dredger and the cruise liner belong to sea ports.
+    if (!look.sea) {
+      this.dredger.group.visible = false;
+      this.terminal.group.visible = false;
+    }
     this.tallShip.update(t, now, heightAt);
 
     // --- tugs ------------------------------------------------------------------

@@ -55,6 +55,16 @@ On the web the port is a full 3D scene (three.js) you can explore:
   bandstand, tiled fountain, torii gate and koi pond, windmill, baobab, neon
   spire) with the town hall in local colours (`square.ts`). Switching port
   rebuilds the land around you.
+- **Four fun ports past the tenth.** Same economy, whole new worlds
+  (`worlds.ts`, `models/vessels.ts`): **Skull Rock Cove**, a pirate cove
+  where galleons bring in treasure chests under a skull-shaped crag;
+  **Coral Deep**, a city on the seabed with cargo submarines, mini-sub tugs,
+  kelp, coral and the sea life swimming round; **Tranquility Base** on the
+  moon, with space freighters hovering over a cratered landing field and
+  Earth in the black sky; and **Orbital One**, a space station where
+  freighters dock in the void below a ringed planet, nudged in by thruster
+  drones. Every vessel keeps the container ship's cargo layout, so the
+  cranes work them all the same way.
 - **Sea life.** A dolphin pod porpoises through the harbour, humpback whales
   blow, dive tail-up and breach out at sea, sharks patrol with their fins out,
   and schools of fish mill under the surface (now and then one jumps). A
@@ -549,8 +559,8 @@ Reputation multiplier is applied in `derivePortStats` via `totalIncome` /
 - One berth per port. Several berths within a port would need
   `berthCycleSeconds` to become an array (the closed-form maths is per-berth
   and unchanged).
-- Ten ports is the ceiling (`BALANCE.ports.maxPorts`). Prices still rise
-  20,000x a port, so the last few are long-term goals that take several runs
+- Fourteen ports is the ceiling (`BALANCE.ports.maxPorts`): ten real harbours and four fun ones. Prices still rise
+  20,000x a port, so the last ones are long-term goals that take several runs
   and Head Office's discounts to reach.
 - Cargo sells instantly at the dock. There is no warehouse, so no storage cap
   and nothing to overflow.

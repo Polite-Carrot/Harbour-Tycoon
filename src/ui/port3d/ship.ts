@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { CONTAINER, containerGeometry, containerMaterial } from './containers';
 import { BAY_XS, CARGO_DECK, SHIP_POINTS, buildContainerShip, buildTug as tugModel, buildYacht, shipHalfBreadth } from './models/ships';
 import type { Livery } from './palette';
+import { FREIGHTER_POINTS, GALLEON_POINTS, SUB_POINTS, buildDrone, buildFreighter, buildGalleon, buildMiniSub, buildSubmarine, type VesselPoints } from './models/vessels';
+import type { ShipKind, TugKind } from './theme';
 import { glow, glowSprite, hash, textTexture } from './util';
 
 /** Unscaled hull dimensions. The whole ship group is scaled by shipScale(). */
@@ -55,6 +57,7 @@ export class ShipModel {
   private readonly radar: THREE.Object3D;
   private readonly propeller: THREE.Object3D;
   private readonly smoke: THREE.Sprite[] = [];
+  private readonly funnel: THREE.Vector3 | null;
 
   /**
    * @param colourOf colour of the box each deck slot arrives with
@@ -67,33 +70,37 @@ export class ShipModel {
     nameIndex: number,
     colourOf: (s: DeckSlot) => number,
     keyOf: (s: DeckSlot) => number,
+    kind: ShipKind = 'container',
   ) {
     this.tiers = tiers;
     const g = this.group;
 
-    const model = buildContainerShip({ hull: livery.hull, bottom: livery.boot, funnel: livery.funnel, windows: windowMaterial });
+    const { model, points } = vessel(kind, livery, windowMaterial);
     g.add(model);
     this.radar = model.getObjectByName('Radar')!;
     this.propeller = model.getObjectByName('Propeller')!;
 
     // --- name on the bows and the transom ------------------------------------
     const name = SHIP_NAMES[nameIndex % SHIP_NAMES.length];
-    const nameTex = textTexture(name);
-    if (nameTex) {
+    const nameTex = points.halfBreadth ? textTexture(name) : null;
+    if (nameTex && points.halfBreadth) {
+      const width = points.halfBreadth;
       const nameMat = new THREE.MeshBasicMaterial({ map: nameTex, transparent: true, depthWrite: false });
       const x = 20;
-      const y = 4.2;
-      const flare = Math.atan2(shipHalfBreadth(x + 0.5, y) - shipHalfBreadth(x, y), 0.5);
+      const y = points.nameY;
+      const flare = Math.atan2(width(x + 0.5, y) - width(x, y), 0.5);
       for (const side of [-1, 1]) {
         const plate = new THREE.Mesh(new THREE.PlaneGeometry(8, 1.5), nameMat);
-        plate.position.set(x, y, side * (shipHalfBreadth(x, y) + 0.06));
+        plate.position.set(x, y, side * (width(x, y) + 0.06));
         plate.rotation.y = side > 0 ? -flare : Math.PI + flare;
         g.add(plate);
       }
-      const stern = new THREE.Mesh(new THREE.PlaneGeometry(7, 1.3), nameMat);
-      stern.position.set(-HULL_LENGTH / 2 - 0.05, y, 0);
-      stern.rotation.y = -Math.PI / 2;
-      g.add(stern);
+      if (kind === 'container') {
+        const stern = new THREE.Mesh(new THREE.PlaneGeometry(7, 1.3), nameMat);
+        stern.position.set(-HULL_LENGTH / 2 - 0.05, y, 0);
+        stern.rotation.y = -Math.PI / 2;
+        g.add(stern);
+      }
     }
 
     // --- navigation lights -------------------------------------------------------
@@ -103,19 +110,20 @@ export class ShipModel {
       this.navLights.push(sp);
       g.add(sp);
     };
-    const wing = SHIP_POINTS.bridgeWing;
+    const wing = points.bridgeWing;
     nav(0xff3030, new THREE.Vector3(wing.x, wing.y, -wing.z)); // port, red
     nav(0x30ff70, wing); // starboard, green
-    nav(0xfff2c0, SHIP_POINTS.masthead, 4);
-    nav(0xfff2c0, SHIP_POINTS.foremast, 4);
-    nav(0xfff2c0, SHIP_POINTS.stern);
+    nav(0xfff2c0, points.masthead, 4);
+    nav(0xfff2c0, points.foremast, 4);
+    nav(0xfff2c0, points.stern);
 
     // --- funnel smoke ----------------------------------------------------------
     const smokeMat = () =>
       new THREE.SpriteMaterial({ map: glow(), color: 0x9aa3ad, transparent: true, depthWrite: false, opacity: 0 });
-    for (let i = 0; i < 7; i++) {
+    this.funnel = points.funnelTop;
+    for (let i = 0; i < (this.funnel ? 7 : 0); i++) {
       const puff = new THREE.Sprite(smokeMat());
-      puff.position.copy(SHIP_POINTS.funnelTop);
+      puff.position.copy(this.funnel!);
       this.smoke.push(puff);
       g.add(puff);
     }
@@ -174,8 +182,9 @@ export class ShipModel {
   animate(t: number) {
     this.radar.rotation.y = t * 2.4;
     this.propeller.rotation.x = t * (2 + this.wake * 14);
-    const top = SHIP_POINTS.funnelTop;
+    const top = this.funnel;
     const n = this.smoke.length;
+    if (!top) return;
     for (let i = 0; i < n; i++) {
       const life = (t * 0.22 + i / n) % 1;
       const p = this.smoke[i];
@@ -193,9 +202,28 @@ export class ShipModel {
 // Tug and sailboat
 // ---------------------------------------------------------------------------
 
-/** A harbour tug: fat rubber fendering, two-storey wheelhouse, twin stacks. */
-export function buildTug(windowMaterial: THREE.Material): THREE.Group {
+/** The port's tug: a harbour tug, a thruster drone or a mini-sub. Same size, same push and tow points. */
+export function buildTug(windowMaterial: THREE.Material, kind: TugKind = 'tug'): THREE.Group {
+  if (kind === 'drone') return buildDrone({ windows: windowMaterial });
+  if (kind === 'minisub') return buildMiniSub();
   return tugModel({ windows: windowMaterial });
+}
+
+/** The port's freighter in its livery, and where her fittings are. */
+function vessel(kind: ShipKind, livery: Livery, windows: THREE.Material): { model: THREE.Group; points: VesselPoints } {
+  switch (kind) {
+    case 'galleon':
+      return { model: buildGalleon({ windows }), points: GALLEON_POINTS };
+    case 'freighter':
+      return { model: buildFreighter({ hull: livery.hull, accent: livery.funnel, windows }), points: FREIGHTER_POINTS };
+    case 'submarine':
+      return { model: buildSubmarine({ hull: livery.funnel, bottom: livery.boot, accent: livery.hull, windows }), points: SUB_POINTS };
+    case 'container':
+      return {
+        model: buildContainerShip({ hull: livery.hull, bottom: livery.boot, funnel: livery.funnel, windows }),
+        points: { ...SHIP_POINTS, halfBreadth: shipHalfBreadth, nameY: 4.2 },
+      };
+  }
 }
 
 /** A sloop with a coloured headsail; white hulls keep the model's own paint. */

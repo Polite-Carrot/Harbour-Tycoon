@@ -326,7 +326,7 @@ export const BALANCE: BalanceConfig = {
   },
 
   ports: {
-    maxPorts: 10,
+    maxPorts: 14,
     baseCost: 20_000,
     costGrowth: 20_000,
     scaleGrowth: 12,
@@ -341,6 +341,10 @@ export const BALANCE: BalanceConfig = {
       'Tulpenhaven',
       'Kilima Coast',
       'Neo Arcadia',
+      'Skull Rock Cove',
+      'Coral Deep',
+      'Tranquility Base',
+      'Orbital One',
     ],
   },
 

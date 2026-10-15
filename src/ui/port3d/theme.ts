@@ -5,19 +5,40 @@
  * green seaside town; then a desert port, a skyscraper city, a snowy
  * northern harbour, a tropical island, a white-washed Mediterranean town,
  * a Japanese harbour in cherry blossom, a Dutch town of brick and
- * windmills, a savanna coast, and a neon city of the future. Ports past the
- * tenth wrap round.
+ * windmills, a savanna coast, and a neon city of the future. Then four fun
+ * ones: a pirate cove, a city on the seabed, a moon base and a space
+ * station, each with its own vessels. Ports past the last wrap round.
  */
 
-export type TreeKind = 'broadleaf' | 'pine' | 'palm' | 'cactus' | 'cypress' | 'acacia';
-export type Backdrop = 'mountains' | 'mesas' | 'skyline' | 'peaks' | 'volcano' | 'rocky' | 'fuji' | 'polder' | 'kilimanjaro' | 'neon';
+export type TreeKind = 'broadleaf' | 'pine' | 'palm' | 'cactus' | 'cypress' | 'acacia' | 'kelp' | 'coral' | 'none';
+export type Backdrop =
+  | 'mountains' | 'mesas' | 'skyline' | 'peaks' | 'volcano' | 'rocky' | 'fuji' | 'polder' | 'kilimanjaro' | 'neon'
+  | 'skullrock' | 'reef' | 'earthrise' | 'planet';
+/**
+ * Where the port is. 'sea' is every real harbour; the fun ports past the
+ * tenth go further: a station in orbit, a base on the moon, a city on the
+ * seabed.
+ */
+export type World = 'sea' | 'space' | 'moon' | 'underwater';
+export type ShipKind = 'container' | 'galleon' | 'freighter' | 'submarine';
+export type TugKind = 'tug' | 'drone' | 'minisub';
+export type CargoKind = 'container' | 'chest';
 /** What stands in the middle of the town square. */
-export type Centrepiece = 'fountain' | 'oasis' | 'sculpture' | 'yuletree' | 'gazebo' | 'mosaic' | 'torii' | 'windmill' | 'baobab' | 'spire';
+export type Centrepiece =
+  | 'fountain' | 'oasis' | 'sculpture' | 'yuletree' | 'gazebo' | 'mosaic' | 'torii' | 'windmill' | 'baobab' | 'spire'
+  | 'treasure' | 'clam' | 'lander' | 'hologram';
 
 type Range = readonly [number, number];
 
 export interface Theme {
-  id: 'temperate' | 'desert' | 'metropolis' | 'nordic' | 'tropical' | 'mediterranean' | 'japanese' | 'dutch' | 'savanna' | 'neon';
+  id:
+    | 'temperate' | 'desert' | 'metropolis' | 'nordic' | 'tropical' | 'mediterranean' | 'japanese' | 'dutch' | 'savanna' | 'neon'
+    | 'pirate' | 'underwater' | 'moon' | 'space';
+  /** Defaults: a sea port, container ships, harbour tugs and containers. */
+  world?: World;
+  ship?: ShipKind;
+  tug?: TugKind;
+  cargo?: CargoKind;
   ground: {
     /** Coast and countryside. */
     grass: number;
@@ -315,6 +336,127 @@ const NEON: Theme = {
   water: { tint: 0x3a2a8c, amount: 0.35 },
 };
 
-export const THEMES: readonly Theme[] = [TEMPERATE, DESERT, METROPOLIS, NORDIC, TROPICAL, MEDITERRANEAN, JAPANESE, DUTCH, SAVANNA, NEON];
+// ---------------------------------------------------------------------------
+// The fun ports, past the tenth
+// ---------------------------------------------------------------------------
+
+const PIRATE: Theme = {
+  id: 'pirate',
+  ship: 'galleon',
+  cargo: 'chest',
+  ground: { grass: 0x4fbf3a, grassDark: 0x37a62f, sand: 0xfbe7b0, yard: 0x9a7448 },
+  hills: [0x2f9e44, 0x37b24d],
+  backdrop: 'skullrock',
+  far: 0x8d8478,
+  snowCaps: false,
+  trees: { town: 'palm', wild: 'palm', leaves: [0x37b24d, 0x2f9e44, 0x51cf66], trunk: 0x9a7448 },
+  town: {
+    walls: [0x8a5a3b, 0xa06a42, 0x6b4630, 0xc49a6c, 0x7a4e30],
+    tallWalls: [0x8a5a3b, 0xa06a42, 0x6b4630],
+    roofs: [0xc9a25a, 0xb38b45, 0x5c3a2e, 0x7a2e2e],
+    roof: 'gable',
+    tallChance: 0.2,
+    tall: [9, 14],
+    town: [6, 9],
+    village: [4, 7],
+    glass: false,
+    domes: [],
+  },
+  square: { paving: 0xd9b98a, joints: 0xb08a5a, centre: 'treasure', flowers: [0xff6b6b, 0xffd43b, 0xff922b], awnings: [0xc92a2a, 0x1d1d20, 0xf8f1e4, 0xc92a2a], hall: { wall: 0x8a5a3b, trim: 0xd4a017, roof: 0x1d1d20, lawn: 0x4fbf3a } },
+  water: { tint: 0x16c7c0, amount: 0.35 },
+};
+
+const UNDERWATER: Theme = {
+  id: 'underwater',
+  world: 'underwater',
+  ship: 'submarine',
+  tug: 'minisub',
+  ground: { grass: 0xd8c79a, grassDark: 0xc4b083, sand: 0xe6d6a8, yard: 0xcdbd90 },
+  hills: [0x6b7f8a, 0x7a8f99],
+  backdrop: 'reef',
+  far: 0x3b6a7a,
+  snowCaps: false,
+  trees: { town: 'coral', wild: 'kelp', leaves: [0xff6b9d, 0xffa94d, 0xb197fc, 0x63e6be, 0xff8787], trunk: 0x2f9e44 },
+  town: {
+    walls: [0xbfe9f2, 0xd3f9f0, 0xe3fafc, 0xc5f6fa, 0xd0ebff],
+    tallWalls: [0x99e9f2, 0xa5d8ff, 0xc3fae8],
+    roofs: [0x15aabf, 0x1098ad, 0x0c8599],
+    roof: 'flat',
+    tallChance: 0.4,
+    tall: [16, 30],
+    town: [8, 14],
+    village: [6, 9],
+    glass: false,
+    domes: [0xd0f4ff, 0xbde6ff, 0xe3fafc],
+  },
+  square: { paving: 0xd8c79a, joints: 0xb8a57a, centre: 'clam', flowers: [0xff6b9d, 0xffa94d, 0xb197fc, 0x63e6be], awnings: [0x15aabf, 0xff8787, 0xffd43b, 0x63e6be], hall: { wall: 0xe3fafc, trim: 0x15aabf, roof: 0x0c8599, lawn: 0xd8c79a } },
+  water: null,
+};
+
+const MOON: Theme = {
+  id: 'moon',
+  world: 'moon',
+  ship: 'freighter',
+  tug: 'drone',
+  ground: { grass: 0xa9a9a9, grassDark: 0x8f8f8f, sand: 0xb8b8b8, yard: 0x9e9e9e },
+  hills: [0x8a8a8a, 0x9a9a9a],
+  backdrop: 'earthrise',
+  far: 0x6e6e6e,
+  snowCaps: false,
+  trees: { town: 'none', wild: 'none', leaves: [0x51cf66], trunk: 0x868e96 },
+  town: {
+    walls: [0xf1f3f5, 0xe9ecef, 0xdee2e6, 0xf8f9fa],
+    tallWalls: [0xf1f3f5, 0xced4da, 0xe9ecef],
+    roofs: [0xadb5bd, 0xced4da, 0x868e96],
+    roof: 'flat',
+    tallChance: 0.3,
+    tall: [12, 22],
+    town: [6, 10],
+    village: [4, 7],
+    glass: false,
+    domes: [0xe7f5ff, 0xf1f3f5, 0xd0ebff],
+  },
+  square: { paving: 0xc8c8c8, joints: 0x9a9a9a, centre: 'lander', flowers: [0x51cf66, 0x40c057, 0x69db7c], awnings: [0xf8f9fa, 0x1c7ed6, 0xe03131], hall: { wall: 0xf1f3f5, trim: 0x1c7ed6, roof: 0xced4da, lawn: 0xa9a9a9 } },
+  water: null,
+};
+
+const SPACE: Theme = {
+  id: 'space',
+  world: 'space',
+  ship: 'freighter',
+  tug: 'drone',
+  ground: { grass: 0x5c6675, grassDark: 0x4a5361, sand: 0x6e7887, yard: 0x56606e },
+  hills: [0x4a5361, 0x5c6675],
+  backdrop: 'planet',
+  far: 0x3a4250,
+  snowCaps: false,
+  // Hydroponic trees in planters.
+  trees: { town: 'broadleaf', wild: 'none', leaves: [0x20c997, 0x38d9a9, 0x63e6be], trunk: 0x495057 },
+  town: {
+    walls: [0xdee2e6, 0xced4da, 0xe9ecef, 0xadb5bd],
+    tallWalls: [0x8ec5ff, 0xb2d8ff, 0xdee2e6, 0x74c0fc],
+    roofs: [0x22e4ff, 0xff8a1f, 0x9d4bff],
+    roof: 'flat',
+    tallChance: 0.7,
+    tall: [30, 70],
+    town: [12, 24],
+    village: [8, 14],
+    glass: true,
+    domes: [],
+    neonRoofs: true,
+  },
+  square: { paving: 0x495057, joints: 0x22e4ff, centre: 'hologram', flowers: [0x20c997, 0x38d9a9, 0x22e4ff], awnings: [0x22e4ff, 0xff8a1f, 0xdee2e6, 0x9d4bff], hall: { wall: 0xdee2e6, trim: 0x22e4ff, roof: 0x495057, lawn: 0x495057 } },
+  water: null,
+};
+
+export const THEMES: readonly Theme[] = [
+  TEMPERATE, DESERT, METROPOLIS, NORDIC, TROPICAL, MEDITERRANEAN, JAPANESE, DUTCH, SAVANNA, NEON,
+  PIRATE, UNDERWATER, MOON, SPACE,
+];
+
+export const worldOf = (t: Theme): World => t.world ?? 'sea';
+export const shipOf = (t: Theme): ShipKind => t.ship ?? 'container';
+export const tugOf = (t: Theme): TugKind => t.tug ?? 'tug';
+export const cargoOf = (t: Theme): CargoKind => t.cargo ?? 'container';
 
 export const themeFor = (port: number): Theme => THEMES[((port % THEMES.length) + THEMES.length) % THEMES.length];
