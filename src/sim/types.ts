@@ -6,8 +6,10 @@ import type { UpgradeId } from '../config/balance';
  * 2 -> `ports` array, so the player can own several.
  * 3 -> prestige (Head Office), daily rewards, boosts and run totals.
  * 4 -> Time Warp usage.
+ * 5 -> money scaled down (smaller numbers, same pacing): older saves have
+ *      their money and Ship Size / Contracts levels shrunk to match.
  */
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 
 /** Rewarded-ad Time Warps: how many today, and when the last one was. */
 export interface TimeWarpState {

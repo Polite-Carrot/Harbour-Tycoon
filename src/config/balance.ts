@@ -27,7 +27,10 @@ export interface UpgradeConfig {
   readonly blurb: string;
   /** Cost of buying level 1. cost(level) = baseCost * costGrowth^level */
   readonly baseCost: number;
-  /** Exponential cost growth per level. Spec range: 1.07 - 1.15. */
+  /**
+   * Exponential cost growth per level. 1.07 - 1.15 for the uncapped tracks;
+   * the short capped tracks climb steeper, up to 1.3.
+   */
   readonly costGrowth: number;
   /**
    * Multiplier applied once per level to the stat this upgrade drives.
@@ -63,13 +66,11 @@ export interface BalanceConfig {
     /**
      * Each further port costs this multiple of the previous one.
      *
-     * The value looks absurd, and it is — deliberately. Late-game income
-     * doubles every couple of minutes, so a port priced at 16x or even 70x the
-     * last one is reached almost immediately and every port unlocks in one
-     * compressed burst. Measured: 16x spaced ports ~8 min apart, 1000x ~13
-     * min, 20000x ~15-18 min. Pricing has very little leverage here; properly
-     * pacing expansion needs a gate money cannot buy (or prestige), which the
-     * slice does not have yet.
+     * This used to be 20,000x, because late-game income doubled every couple
+     * of minutes and anything less let every port unlock in one burst. With
+     * the gentler curve 9x spaces them out on its own: a first run opens port
+     * 2 at ~2h30 and one more every 30-70 minutes after (9 by the 8-hour
+     * mark), and port 14 costs ~$5.6Qa instead of ~$8e55.
      */
     readonly costGrowth: number;
     /**
@@ -163,15 +164,26 @@ export const BALANCE: BalanceConfig = {
     // costs costGrowth more. Keep
     //
     //     product of UNCAPPED effectPerLevel  <  min UNCAPPED costGrowth
-    //     current: 1.08 * 1.06 = 1.1448       <  1.15            OK
+    //     current: 1.036 * 1.038 = 1.075      <  1.14            OK
     //
     // or the economy hyperinflates to Infinity within the hour.
     //
-    // That budget is nearly spent, which is why every track added since is
-    // CAPPED. A capped track terminates: it contributes a bounded one-off
-    // multiplier and then stops, so it cannot drive runaway growth no matter
-    // how strong it is. Any NEW uncapped track would have to come out of the
-    // 1.15 budget above — in practice that means capping it instead.
+    // Every track added since the first two is CAPPED. A capped track
+    // terminates: it contributes a bounded one-off multiplier and then
+    // stops, so it cannot drive runaway growth no matter how strong it is.
+    //
+    // ---- HOW BIG THE NUMBERS GET ------------------------------------------
+    // The closer that product gets to costGrowth, the more the uncapped
+    // tracks AMPLIFY every one-off multiplier (a capped track, a new port):
+    // the extra income makes ship-size and contract levels cheap, which buys
+    // more income, and so on. At 1.113 against 1.15 a capped track was
+    // amplified ~4x in the exponent and an 8-hour run reached ~$1e36. Now
+    // each level is a smaller step (+3.6%, +3.8%) at the same cost-to-income
+    // ratio, so purchases come just as often but the money grows far more
+    // gently: an 8-hour run reaches ~$30T, and the last port costs ~$5.6Qa.
+    // To make the numbers bigger or smaller, scale the per-level effects and
+    // keep costGrowth / (shipSize x contracts effect) where it is (~1.06);
+    // that ratio is what sets the purchase cadence.
     //
     // `balance.test.ts` enforces the rule; `npm run balance` shows a breach as
     // purchase gaps that shrink toward zero instead of holding steady.
@@ -186,8 +198,9 @@ export const BALANCE: BalanceConfig = {
     // A dearer track must BUY MORE. Measured on a fresh port, the income
     // multiplier from one level must rise with base cost:
     //
-    //   cranes 1.037 < shipSize 1.05 < contracts 1.06
-    //     < tugboats 1.080 < floodlights 1.10 < customs 1.13
+    //   cranes 1.034 < shipSize 1.036 < contracts 1.038 < tugboats 1.042
+    //     < floodlights 1.066 < customs 1.069 < railLink 1.071
+    //     < dredging 1.074 < cruise 1.080
     //
     // `balance.test.ts` asserts that ordering. Two things make it awkward, and
     // both are why this was wrong before:
@@ -196,21 +209,23 @@ export const BALANCE: BalanceConfig = {
     //    they can never sit high on the ladder. They belong at the cheap end.
     //    Floodlights used to be one and was badly overpriced for it.
     //  - effectPerLevel must stay BELOW that track's costGrowth, or the track
-    //    accelerates within itself and every level gets bought at once. That
-    //    ceiling (~1.15) is why per-level effects cannot scale freely with
-    //    price; deeper CAPS are what let a dear track be worth more overall.
+    //    accelerates within itself and every level gets bought at once. The
+    //    capped tracks sit well below it, with steep costGrowth (1.24-1.27)
+    //    and short caps, so their levels are bought over a stretch of play
+    //    instead of in one burst when several unlock close together.
     // ----------------------------------------------------------------------
 
     // Cranes cut unload time. Effect is multiplicative and floors out at
     // minUnloadSeconds, so cranes deliberately stop being worth buying past
     // ~level 30 and the player rotates to the other two tracks.
+    // (6s * 0.945^30 ~= 1s at the cap.)
     cranes: {
       id: 'cranes',
       name: 'Cranes',
       blurb: 'Unload each ship faster',
       baseCost: 30,
       costGrowth: 1.14,
-      effectPerLevel: 0.94,
+      effectPerLevel: 0.945,
       maxLevel: 30,
     },
 
@@ -220,8 +235,8 @@ export const BALANCE: BalanceConfig = {
       name: 'Ship Size',
       blurb: 'More cargo on every ship',
       baseCost: 45,
-      costGrowth: 1.15,
-      effectPerLevel: 1.05,
+      costGrowth: 1.14,
+      effectPerLevel: 1.036,
       maxLevel: null,
     },
 
@@ -232,10 +247,10 @@ export const BALANCE: BalanceConfig = {
       name: 'Contracts',
       blurb: 'Sell cargo at a better price',
       baseCost: 75,
-      costGrowth: 1.15,
-      effectPerLevel: 1.06,
+      costGrowth: 1.14,
+      effectPerLevel: 1.038,
       maxLevel: null,
-      // NOTE: 1.05 * 1.06 = 1.113, comfortably under the 1.15 budget.
+      // NOTE: 1.036 * 1.038 = 1.075, well under the 1.14 budget.
     },
 
     // Tugboats work the OTHER half of the cycle: the dead time before a ship
@@ -245,17 +260,17 @@ export const BALANCE: BalanceConfig = {
       id: 'tugboats',
       name: 'Tugboats',
       blurb: 'Ships reach the berth sooner',
-      baseCost: 900,
+      baseCost: 400,
       costGrowth: 1.14,
-      effectPerLevel: 0.815,
-      // Capped where arrival reaches minArrivalSeconds: 4 * 0.815^7 ~= 0.94,
-      // already under the 1s floor. Beyond this the track would sell levels
-      // that do nothing.
-      maxLevel: 7,
+      effectPerLevel: 0.9,
+      // Capped where arrival reaches minArrivalSeconds: 4 * 0.9^14 ~= 0.92,
+      // just under the 1s floor (level 13 is still 1.02s, so it still pays).
+      // Beyond this the track would sell levels that do nothing.
+      maxLevel: 14,
     },
 
     // Floodlights were a third timing track, which made them weak: the cycle
-    // floors cap what any timing upgrade can ever be worth, and a $12K tile
+    // floors cap what any timing upgrade can ever be worth, and a dear tile
     // that bought +3% was strictly worse value than a $45 one buying +5%.
     // They are now a yield multiplier, which lets the effect sit where the
     // price says it should on the ladder.
@@ -263,43 +278,44 @@ export const BALANCE: BalanceConfig = {
       id: 'floodlights',
       name: 'Floodlights',
       blurb: 'Night crews work the cargo',
-      baseCost: 12_000,
-      costGrowth: 1.13,
-      effectPerLevel: 1.1,
-      maxLevel: 25,
+      baseCost: 600,
+      costGrowth: 1.125,
+      effectPerLevel: 1.066,
+      maxLevel: 21,
     },
 
-    // Customs House is the most expensive track, so it has the biggest effect
-    // per level and the deepest cap. costGrowth must stay above effectPerLevel
-    // or the track accelerates within itself and the player buys every level
-    // in one burst.
+    // Customs House: the last of the early tracks, a bigger price effect per
+    // level than floodlights. costGrowth must stay above effectPerLevel or the
+    // track accelerates within itself and the player buys every level in one
+    // burst.
     customs: {
       id: 'customs',
       name: 'Customs House',
       blurb: 'Clear cargo at a premium',
-      baseCost: 250_000,
-      costGrowth: 1.15,
-      effectPerLevel: 1.13,
-      maxLevel: 40,
+      baseCost: 2000,
+      costGrowth: 1.27,
+      effectPerLevel: 1.069,
+      maxLevel: 12,
     },
 
     // ---- The late tracks ---------------------------------------------------
-    // Bought from the second or third hour of a run. All CAPPED (see the
-    // stability rule), each dearer and stronger than the last so the value
-    // ladder keeps climbing (1.13 < 1.135 < 1.14 < 1.145), all inside the
-    // 1.15 cost-growth ceiling. Together they are worth ~460x per port. Each
-    // visibly builds something in the 3D port: a railway, a dredger and
-    // bigger ships, a cruise terminal.
+    // Unlocked through the third and fourth hours of a first run (rail ~2h45,
+    // dredging ~3h10, cruise ~3h30). All CAPPED (see the stability rule),
+    // each dearer and stronger than the last so the value ladder keeps
+    // climbing (1.069 < 1.071 < 1.074 < 1.080). Together with floodlights
+    // and customs they are worth ~94x per port. Each visibly builds something
+    // in the 3D port: a railway, a dredger and bigger ships, a cruise
+    // terminal.
 
     // Rail Link: freight trains clear the yard straight inland.
     railLink: {
       id: 'railLink',
       name: 'Rail Link',
       blurb: 'Trains haul cargo inland',
-      baseCost: 5_000_000,
-      costGrowth: 1.15,
-      effectPerLevel: 1.135,
-      maxLevel: 20,
+      baseCost: 50_000,
+      costGrowth: 1.24,
+      effectPerLevel: 1.071,
+      maxLevel: 9,
     },
 
     // Dredging: a deeper channel lets bigger ships in, so each carries more.
@@ -307,10 +323,10 @@ export const BALANCE: BalanceConfig = {
       id: 'dredging',
       name: 'Dredging',
       blurb: 'Deeper berths for bigger ships',
-      baseCost: 200_000_000,
-      costGrowth: 1.15,
-      effectPerLevel: 1.14,
-      maxLevel: 15,
+      baseCost: 250_000,
+      costGrowth: 1.26,
+      effectPerLevel: 1.074,
+      maxLevel: 11,
     },
 
     // Cruise Terminal: liners call, and their passengers spend in town.
@@ -318,18 +334,18 @@ export const BALANCE: BalanceConfig = {
       id: 'cruise',
       name: 'Cruise Terminal',
       blurb: 'Tourists spend big in town',
-      baseCost: 10_000_000_000,
-      costGrowth: 1.15,
-      effectPerLevel: 1.145,
-      maxLevel: 12,
+      baseCost: 1_500_000,
+      costGrowth: 1.26,
+      effectPerLevel: 1.08,
+      maxLevel: 13,
     },
   },
 
   ports: {
     maxPorts: 14,
     baseCost: 20_000,
-    costGrowth: 20_000,
-    scaleGrowth: 12,
+    costGrowth: 9,
+    scaleGrowth: 3.6,
     names: [
       'Old Harbour',
       'Saltmere Quay',
@@ -359,11 +375,13 @@ export const BALANCE: BalanceConfig = {
   },
 
   prestige: {
-    // Worth selling from about the two-hour mark ($1B earned is the first
-    // star). A first full run is worth ~30-50 stars and later runs a little
-    // more, so the 800-star perk is dozens of runs away.
-    minEarnings: 1e9,
-    starScale: 1.5,
+    // Worth selling from about the 2h40 mark ($1M earned is the first star).
+    // A first 8-hour run is worth ~38 stars and later runs 60-75, so the
+    // 800-star perk is a dozen or so runs away. 5 stars per 10x because a run
+    // now spans about a dozen orders of magnitude (it was 1.5 when runs
+    // spanned thirty-odd).
+    minEarnings: 1e6,
+    starScale: 5,
     incomePerStar: 0.1,
   },
 
