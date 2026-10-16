@@ -371,6 +371,23 @@ export function claimVip(
  * ad has actually been watched. Refused (state unchanged) while on cooldown
  * or once today's warps are spent.
  */
+/**
+ * The "while you were away" ad: watching it multiplies what the player earned
+ * while away by `offline.adMultiplier` (3 = triple). The report has already
+ * been paid once, so this pays the difference. The caller makes sure each
+ * report is only boosted once (it is dismissed with the payout).
+ */
+export function claimOfflineAdBonus(
+  state: GameState,
+  report: OfflineReport,
+  now: number,
+  cfg: BalanceConfig = BALANCE,
+): { state: GameState; earned: number } {
+  const extra = report.earned * (cfg.offline.adMultiplier - 1);
+  if (!Number.isFinite(extra) || extra <= 0) return { state, earned: 0 };
+  return { state: applyReward(state, { money: extra, stars: 0, boostSeconds: 0 }, now), earned: extra };
+}
+
 export function claimTimeWarp(
   state: GameState,
   day: number,

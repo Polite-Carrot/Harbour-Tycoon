@@ -93,6 +93,8 @@ export interface BalanceConfig {
     readonly efficiency: number;
     /** Away time below this is treated as a normal tick, no "while away" popup. */
     readonly minReportSeconds: number;
+    /** Watching the rewarded ad on the "while away" popup multiplies its payout by this. */
+    readonly adMultiplier: number;
   };
   /**
    * Selling the company: start over with Reputation stars that raise income
@@ -372,6 +374,7 @@ export const BALANCE: BalanceConfig = {
     capSeconds: 4 * 60 * 60,
     efficiency: 1,
     minReportSeconds: 60,
+    adMultiplier: 3,
   },
 
   prestige: {

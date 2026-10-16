@@ -29,6 +29,11 @@ export type Centrepiece =
   | 'treasure' | 'clam' | 'lander' | 'hologram';
 
 type Range = readonly [number, number];
+/**
+ * What the town is built of. 'houses' is every real port; the fun ports
+ * build a seabed base, a moon base, or a starship's deck instead (habitat.ts).
+ */
+export type TownStyle = 'houses' | 'seabase' | 'moonbase' | 'starship';
 
 export interface Theme {
   id:
@@ -62,6 +67,8 @@ export interface Theme {
     trunk: number;
   };
   town: {
+    /** Defaults to 'houses'. */
+    style?: TownStyle;
     walls: readonly number[];
     /** Walls of the tall buildings in the middle of town. */
     tallWalls: readonly number[];
@@ -378,6 +385,7 @@ const UNDERWATER: Theme = {
   snowCaps: false,
   trees: { town: 'coral', wild: 'kelp', leaves: [0xff6b9d, 0xffa94d, 0xb197fc, 0x63e6be, 0xff8787], trunk: 0x2f9e44 },
   town: {
+    style: 'seabase',
     walls: [0xbfe9f2, 0xd3f9f0, 0xe3fafc, 0xc5f6fa, 0xd0ebff],
     tallWalls: [0x99e9f2, 0xa5d8ff, 0xc3fae8],
     roofs: [0x15aabf, 0x1098ad, 0x0c8599],
@@ -405,6 +413,7 @@ const MOON: Theme = {
   snowCaps: false,
   trees: { town: 'none', wild: 'none', leaves: [0x51cf66], trunk: 0x868e96 },
   town: {
+    style: 'moonbase',
     walls: [0xf1f3f5, 0xe9ecef, 0xdee2e6, 0xf8f9fa],
     tallWalls: [0xf1f3f5, 0xced4da, 0xe9ecef],
     roofs: [0xadb5bd, 0xced4da, 0x868e96],
@@ -433,6 +442,7 @@ const SPACE: Theme = {
   // Hydroponic trees in planters.
   trees: { town: 'broadleaf', wild: 'none', leaves: [0x20c997, 0x38d9a9, 0x63e6be], trunk: 0x495057 },
   town: {
+    style: 'starship',
     walls: [0xdee2e6, 0xced4da, 0xe9ecef, 0xadb5bd],
     tallWalls: [0x8ec5ff, 0xb2d8ff, 0xdee2e6, 0x74c0fc],
     roofs: [0x22e4ff, 0xff8a1f, 0x9d4bff],

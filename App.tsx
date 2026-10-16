@@ -35,6 +35,7 @@ export default function App() {
     choosePort,
     resetGame,
     dismissOfflineReport,
+    boostOfflineReport,
     sell,
     claimDailyLogin,
     claimDailyContract,
@@ -57,6 +58,14 @@ export default function App() {
       setWarpCollected(paid);
       setWarpStartedAt(performance.now());
     }
+  };
+  const [offlineAdBusy, setOfflineAdBusy] = useState(false);
+  const watchForOfflineBonus = async () => {
+    setOfflineAdBusy(true);
+    const rewarded = await ad.show();
+    setOfflineAdBusy(false);
+    // Closing the ad early keeps the popup, so the player can still collect.
+    if (rewarded) boostOfflineReport();
   };
   const [officeOpen, setOfficeOpen] = useState(false);
   const [dailyOpen, setDailyOpen] = useState(false);
@@ -187,7 +196,13 @@ export default function App() {
       />
       {ad.element}
 
-      <OfflineModal report={offlineReport} onDismiss={dismissOfflineReport} />
+      <OfflineModal
+        report={offlineReport}
+        busy={offlineAdBusy}
+        hidden={!!ad.element}
+        onDismiss={dismissOfflineReport}
+        onWatchAd={watchForOfflineBonus}
+      />
       <StatusBar style="dark" />
     </SafeAreaView>
   );

@@ -334,3 +334,25 @@ describe('formatting', () => {
     expect(formatNumber(-8)).toBe('-8.00');
   });
 });
+
+describe('the "while you were away" ad', () => {
+  it('tops the away earnings up to triple, counting toward the run', async () => {
+    const { claimOfflineAdBonus } = await import('../engine');
+    const s = { ...fresh(), money: 100, lifetimeEarnings: 100, runEarnings: 100 };
+    const report = { earned: 100, awaySeconds: 3600, creditedSeconds: 3600, wasCapped: false };
+    const r = claimOfflineAdBonus(s, report, 0, BALANCE);
+    expect(BALANCE.offline.adMultiplier).toBe(3);
+    expect(r.earned).toBe(200);
+    expect(r.state.money).toBe(300);
+    expect(r.state.lifetimeEarnings).toBe(300);
+    expect(r.state.runEarnings).toBe(300);
+  });
+
+  it('pays nothing for an empty report', async () => {
+    const { claimOfflineAdBonus } = await import('../engine');
+    const s = fresh();
+    const r = claimOfflineAdBonus(s, { earned: 0, awaySeconds: 60, creditedSeconds: 60, wasCapped: false }, 0, BALANCE);
+    expect(r.earned).toBe(0);
+    expect(r.state).toBe(s);
+  });
+});
