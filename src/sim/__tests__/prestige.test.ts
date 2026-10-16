@@ -28,10 +28,12 @@ describe('reputation stars', () => {
   it('grows steadily with every order of magnitude, never explosively', () => {
     // Linear in the exponent: each extra 10x earned adds the same few stars.
     // Steeper formulas snowballed — see the note on starsFor.
+    // A run spans about a dozen orders of magnitude, so ~5 per 10x makes a
+    // run worth a few dozen stars.
     const per10x = starsFor(1e21) - starsFor(1e20);
-    expect(per10x).toBeGreaterThanOrEqual(1);
-    expect(per10x).toBeLessThanOrEqual(2);
-    expect(starsFor(1e40) - starsFor(1e30)).toBeLessThanOrEqual(16);
+    expect(per10x).toBeGreaterThanOrEqual(4);
+    expect(per10x).toBeLessThanOrEqual(6);
+    expect(starsFor(1e40) - starsFor(1e30)).toBeLessThanOrEqual(51);
     for (let e = 9; e < 60; e++) expect(starsFor(10 ** (e + 1))).toBeGreaterThanOrEqual(starsFor(10 ** e));
   });
 
@@ -52,7 +54,8 @@ describe('reputation stars', () => {
 });
 
 describe('selling the company', () => {
-  const rich = (): GameState => ({ ...createNewGame(0, BALANCE), money: 1e30, runEarnings: 1e30, lifetimeEarnings: 2e30 });
+  // Earned enough for stars, but not the 50 that pre-levels new ports.
+  const rich = (): GameState => ({ ...createNewGame(0, BALANCE), money: 1e12, runEarnings: 1e12, lifetimeEarnings: 2e12 });
 
   it('refuses a sale worth no stars', () => {
     const s = createNewGame(0, BALANCE);
@@ -64,16 +67,16 @@ describe('selling the company', () => {
     let s = rich();
     s = buyPort(s, BALANCE).state;
     const { state, stars } = sellCompany(s, 5000, BALANCE);
-    expect(stars).toBe(starsFor(1e30));
+    expect(stars).toBe(starsFor(1e12));
     expect(state.prestige.stars).toBe(stars);
     expect(state.prestige.resets).toBe(1);
-    expect(state.prestige.bestRun).toBe(1e30);
+    expect(state.prestige.bestRun).toBe(1e12);
     expect(state.ports).toHaveLength(1);
     expect(Object.values(state.ports[0].upgrades).every((l) => l === 0)).toBe(true);
     expect(state.runEarnings).toBe(0);
     expect(state.lastTickAt).toBe(5000);
     // Lifetime history is never reset.
-    expect(state.lifetimeEarnings).toBe(2e30);
+    expect(state.lifetimeEarnings).toBe(2e12);
   });
 
   it('pays out a perk crossed by this very sale', () => {

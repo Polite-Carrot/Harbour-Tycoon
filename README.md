@@ -119,13 +119,14 @@ at runtime and ships no model files.
 A run takes a couple of hours to build a port empire; the game is built to be
 played over weeks.
 
-**Late upgrades.** Three dear, capped tracks open from about the second hour:
+**Late upgrades.** Three dear, capped tracks open one after another through
+the third and fourth hours:
 **Rail Link** (container trains run inland along the coast), **Dredging** (a
 grab dredger works the channel, and ships grow a size class) and **Cruise
 Terminal** (a terminal hall and a liner alongside). Each one appears in the
 3D harbour when bought.
 
-**Head Office (prestige).** Once a run has earned $1B, the company can be sold
+**Head Office (prestige).** Once a run has earned $1M, the company can be sold
 for Reputation stars. Stars are permanent: each adds +10% income on every port,
 for good. Star milestones unlock perks:
 
@@ -140,11 +141,10 @@ for good. Star milestones unlock perks:
 | 800 | Golden Fleet: all income doubled |
 | 1500 | Shipping Dynasty: doubled again |
 
-Stars are linear in the exponent of what a run earned (1.5 per 10x). Steeper
+Stars are linear in the exponent of what a run earned (5 per 10x). Steeper
 curves snowballed in simulation: runs collapsed from hours to two minutes and
-every perk unlocked on day one. With the linear curve a sensible player
-earns ~40-50 stars a run and runs settle at 70-90 minutes, so the ladder
-takes many sessions: ~20 runs to Golden Fleet, ~35 to Shipping Dynasty.
+every perk unlocked on day one. With the linear curve a first 8-hour run is
+worth ~38 stars and later runs 60-75, so the ladder takes many sessions.
 
 **Daily.** A seven-day login streak (minutes of income, stars on day seven;
 miss a day and it restarts), three daily contracts sized to the port (handle
@@ -262,11 +262,12 @@ The harbour is not one port. Each port runs **its own berth and its own
 upgrade levels**, and they all tick at once — total income is the sum.
 
 A new port costs `baseCost * costGrowth^i` and is a real milestone: on the
-current tune the second opens around 80 minutes in, and the rest follow roughly
-every half hour.
+current tune the second opens about 2.5 hours into a first run and the rest
+follow every 30-70 minutes (9 ports by the 8-hour mark). Each costs 9x the one
+before: port 10 is ~$860B and the last, Orbital One, ~$5.6Qa.
 
 The design rule that makes this safe: **port `i` scales its yields AND its
-upgrade costs by the same tier factor** (`scaleGrowth^i`, currently 12). That
+upgrade costs by the same tier factor** (`scaleGrowth^i`, currently 3.6). That
 makes every port a self-similar copy of the first, so the stability rule below
 holds per-port and therefore holds for the sum, no matter how many are owned.
 Scaling yields without costs would make each new port trivially farmable — a
@@ -293,20 +294,23 @@ Late-game pacing (last 240 upgrades)
   per-track gap   93.9s  <- the runaway detector
 ```
 
-### Pricing cannot pace expansion
+### Keeping the numbers small
 
-`ports.costGrowth` is 20,000. That looks absurd and it is, deliberately.
+`ports.costGrowth` used to be 20,000 and an 8-hour run reached ~$1e36: income
+went from ~$1K/s to ~$1e26/s in half an hour once the late tracks unlocked
+together, and port prices ran out to ~$8e55. The cause was the uncapped
+tracks. Each extra bit of income makes Ship Size and Contracts levels cheap,
+which buys more income, so every one-off multiplier (a capped track, a new
+port) got amplified about 4x in the exponent.
 
-Late-game income doubles every couple of minutes, so a port priced at 16x the
-last one is reached almost instantly and every port unlocks in one compressed
-burst. Measured spacing between port unlocks: **16x -> ~8 min apart, 1000x ->
-~13 min, 20000x -> ~15-18 min**. Four orders of magnitude of price bought about
-ten minutes.
-
-The conclusion is that money cannot gate expansion in an economy that compounds
-this fast. Within a run, ports still all open inside the first ~2.5 hours;
-the long arc now comes from Head Office, where each run restarts from one port
-and the perks change how fast the next run expands.
+The retune keeps the **cadence**, a purchase every minute or so, and makes
+each step smaller: Ship Size +3.6% and Contracts +3.8% a level (were +5% and
++6%), with costGrowth lowered to match so cost-to-income stays the same. The
+capped tracks are shorter and steeper (worth ~94x together, was ~500,000x) and
+unlock one after another. The result: an 8-hour run reaches ~$30T, ports open
+one at a time, and prestige pacing is unchanged (the first star comes at
+~2h40, then ~18, ~8, ~4 minutes into later runs, as before). Saves from before
+the change are migrated (`shrinkLegacyMoney` in `engine.ts`).
 
 ## Buying things
 
@@ -326,12 +330,15 @@ track multiplies income by more as base cost rises:
 
 | track | base cost | effect | fresh-port gain | cap |
 |---|---|---|---|---|
-| Cranes | $30 | unload faster | x1.037 | 30 |
-| Ship Size | $45 | more cargo per ship | x1.05 | — |
-| Contracts | $75 | better price per unit | x1.06 | — |
-| Tugboats | $900 | ships reach the berth sooner | x1.080 | 7 |
-| Floodlights | $12K | multiplies what a ship is worth | x1.10 | 25 |
-| Customs House | $250K | biggest price multiplier | x1.13 | 40 |
+| Cranes | $30 | unload faster | x1.034 | 30 |
+| Ship Size | $45 | more cargo per ship | x1.036 | — |
+| Contracts | $75 | better price per unit | x1.038 | — |
+| Tugboats | $400 | ships reach the berth sooner | x1.042 | 14 |
+| Floodlights | $600 | multiplies what a ship is worth | x1.066 | 21 |
+| Customs House | $2K | price multiplier | x1.069 | 12 |
+| Rail Link | $50K | yield multiplier | x1.071 | 9 |
+| Dredging | $250K | more cargo per ship | x1.074 | 11 |
+| Cruise Terminal | $1.5M | yield multiplier | x1.080 | 13 |
 
 `balance.test.ts` asserts that ordering. It was wrong before, in two ways worth
 knowing about if this is ever retuned:
@@ -347,7 +354,7 @@ knowing about if this is ever retuned:
 
 Two constraints shape what is possible here:
 
-- **`effectPerLevel` must stay below that track's own `costGrowth`** (~1.15),
+- **`effectPerLevel` must stay below that track's own `costGrowth`**,
   or each level is better value than the last and the whole track gets bought
   in one burst. So per-level effects *cannot* scale freely with price — deeper
   **caps** are what let a dear track be worth more overall.
@@ -368,7 +375,7 @@ levelled unevenly their *current* prices will not be in order; payback is the
 signal to read instead.
 
 Every track after the original three is **capped**, and that is forced, not
-stylistic: the uncapped budget is 1.05 x 1.06 = 1.113 against a 1.15 ceiling.
+stylistic: the uncapped budget is 1.036 x 1.038 = 1.075 against a 1.14 ceiling.
 A capped track terminates, contributing a bounded one-off multiplier, so it
 cannot compound into a runaway. Any new uncapped track would have to come out
 of that budget.
@@ -483,15 +490,16 @@ All numbers are in `src/config/balance.ts`. Change them, then:
 npm run balance
 ```
 
-which simulates an active player for four hours and prints time-between-
+which simulates an active player for eight hours and prints time-between-
 purchases, the income curve, and offline yield. Current tune:
 
 | metric | value |
 |---|---|
 | opening income | 0.80/s (8 cargo per 10s cycle) |
 | first upgrade | 30 (~38s of play) |
-| first 20 purchase gaps | mean 50s, all within the 30–90s target |
-| gaps out to 4h | 35–64s |
+| first 20 purchase gaps | mean 58s, all within the 30–90s target |
+| ports opened in 8h | 9 (first at ~2h30) |
+| earned in 8h | ~$30T |
 | offline cap | 4 hours, full rate |
 
 ### The stability rule
@@ -504,7 +512,7 @@ hour — the first tune of this game did exactly that (`shipSize` reached level
 
 ```
 shipSize.effectPerLevel * contracts.effectPerLevel  <  min costGrowth
-current: 1.08 * 1.06 = 1.1448  <  1.15
+current: 1.036 * 1.038 = 1.075  <  1.14
 ```
 
 `balance.test.ts` enforces this directly, and also plays three simulated hours

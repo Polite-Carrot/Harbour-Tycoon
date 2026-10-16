@@ -133,8 +133,8 @@ describe('the stability rule', () => {
   });
 
   it('caps every track added beyond the original uncapped pair', () => {
-    // The uncapped budget is nearly spent (1.1448 of 1.15), so any further
-    // track has to be capped. A capped track terminates and cannot compound.
+    // The uncapped tracks are kept to two, so any further track has to be
+    // capped. A capped track terminates and cannot compound.
     const uncapped = UPGRADE_ORDER.filter((id) => BALANCE.upgrades[id].maxLevel === null);
     expect(uncapped).toEqual(['shipSize', 'contracts']);
 
@@ -158,10 +158,11 @@ describe('the stability rule', () => {
     // A tripwire, not a design limit: capped tracks are safe at any size, but
     // a cap bump should not silently change the economy by orders of
     // magnitude without someone seeing this fail.
-    // Raised from 20K when Rail Link, Dredging and Cruise Terminal were added
-    // (~460x between them, on top of ~1.4K from floodlights and customs).
-    expect(totalMultiplier).toBeGreaterThan(100_000);
-    expect(totalMultiplier).toBeLessThan(1_000_000);
+    // Was ~500,000x before the money was scaled down. The uncapped tracks
+    // amplify this one-off multiplier several times over, so it is a big
+    // part of how large the numbers get; it is now ~94x.
+    expect(totalMultiplier).toBeGreaterThan(30);
+    expect(totalMultiplier).toBeLessThan(300);
   });
 });
 

@@ -30,10 +30,13 @@ describe('cost curves', () => {
     expect(cumulativeCost('shipSize', 12, 0, BALANCE)).toBeCloseTo(summed, 6);
   });
 
-  it('keeps every growth rate inside the designed 1.07-1.15 band', () => {
+  it('keeps every growth rate inside its designed band', () => {
+    // The uncapped tracks live in 1.07-1.15. The short capped tracks climb
+    // steeper (up to 1.3), so a few levels of each are bought over a while
+    // rather than the whole track at once.
     for (const u of Object.values(BALANCE.upgrades)) {
       expect(u.costGrowth).toBeGreaterThanOrEqual(1.07);
-      expect(u.costGrowth).toBeLessThanOrEqual(1.15);
+      expect(u.costGrowth).toBeLessThanOrEqual(u.maxLevel === null ? 1.15 : 1.3);
     }
   });
 });
@@ -259,6 +262,39 @@ describe('save sanitising', () => {
     const many = Array.from({ length: 50 }, () => ({}));
     const restored = sanitise({ ports: many }, 1000, BALANCE)!;
     expect(restored.ports.length).toBe(BALANCE.ports.maxPorts);
+  });
+});
+
+describe('saves from before the money was scaled down', () => {
+  const legacy = {
+    version: 4,
+    money: 1e36,
+    lifetimeEarnings: 2e36,
+    runEarnings: 2e36,
+    prestige: { stars: 41, resets: 1, bestRun: 3e36 },
+    ports: [{ upgrades: { cranes: 30, shipSize: 400, contracts: 400, customs: 40 }, berthCycleSeconds: 0 }],
+    activePort: 0,
+    lastTickAt: 0,
+  };
+
+  it('shrinks big balances onto the new curve and keeps stars', () => {
+    const s = sanitise(legacy, 0, BALANCE)!;
+    expect(s.money).toBeGreaterThan(1e12);
+    expect(s.money).toBeLessThan(1e15);
+    expect(s.lifetimeEarnings).toBeLessThan(1e15);
+    expect(s.prestige.bestRun).toBeLessThan(1e15);
+    expect(s.prestige.stars).toBe(41);
+    expect(s.ports[0].upgrades.shipSize).toBe(200);
+    expect(s.ports[0].upgrades.contracts).toBe(220);
+    // Capped tracks are clamped to their new caps, as for any save.
+    expect(s.ports[0].upgrades.customs).toBe(BALANCE.upgrades.customs.maxLevel);
+  });
+
+  it('leaves small balances alone, and current saves untouched', () => {
+    expect(sanitise({ ...legacy, money: 500 }, 0, BALANCE)!.money).toBe(500);
+    const current = sanitise({ ...legacy, version: 5 }, 0, BALANCE)!;
+    expect(current.money).toBe(1e36);
+    expect(current.ports[0].upgrades.shipSize).toBe(400);
   });
 });
 

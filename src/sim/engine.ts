@@ -417,13 +417,51 @@ function sanitisePort(raw: unknown, cfg: BalanceConfig): PortState {
  * and a single NaN here would poison every subsequent tick, so every field is
  * checked.
  */
+/**
+ * v5 scaled the economy down: an 8-hour run that used to reach ~$1e36 now
+ * reaches ~$1e13, at the same pacing. Map an older save's money onto the new
+ * curve, keeping small amounts as they are: below $10K the two curves agree.
+ */
+export function shrinkLegacyMoney(value: number): number {
+  if (!(value > 1e4)) return value;
+  return 1e4 * Math.pow(value / 1e4, 0.3);
+}
+
+/** Old Ship Size / Contracts levels, scaled to buy about the same share of the new curve. */
+const LEGACY_LEVEL_SCALE: Partial<Record<UpgradeId, number>> = { shipSize: 0.5, contracts: 0.55 };
+
+function migrateLegacy(r: Record<string, unknown>): Record<string, unknown> {
+  const money = (v: unknown) => (typeof v === 'number' ? shrinkLegacyMoney(v) : v);
+  const port = (raw: unknown) => {
+    const p = (raw ?? {}) as Record<string, unknown>;
+    const upgrades = { ...((p.upgrades ?? {}) as Record<string, unknown>) };
+    for (const [id, k] of Object.entries(LEGACY_LEVEL_SCALE)) {
+      if (typeof upgrades[id] === 'number') upgrades[id] = Math.floor((upgrades[id] as number) * k!);
+    }
+    return { ...p, upgrades };
+  };
+  const prestige = (r.prestige ?? {}) as Record<string, unknown>;
+  return {
+    ...r,
+    money: money(r.money),
+    lifetimeEarnings: money(r.lifetimeEarnings),
+    runEarnings: money(r.runEarnings),
+    prestige: { ...prestige, bestRun: money(prestige.bestRun) },
+    ports: Array.isArray(r.ports) ? r.ports.map(port) : r.ports,
+    upgrades: r.upgrades === undefined ? undefined : port({ upgrades: r.upgrades }).upgrades,
+  };
+}
+
 export function sanitise(
   raw: unknown,
   now: number = Date.now(),
   cfg: BalanceConfig = BALANCE,
 ): GameState | null {
   if (typeof raw !== 'object' || raw === null) return null;
-  const r = raw as Record<string, unknown>;
+  let r = raw as Record<string, unknown>;
+  // Saves from before the rescale. A save with no version at all is not one
+  // of ours to migrate (and the tests build such partial saves by hand).
+  if (typeof r.version === 'number' && r.version < 5) r = migrateLegacy(r);
 
   // v1 kept a single port flat on the root; lift it into ports[0].
   const rawPorts = Array.isArray(r.ports)
