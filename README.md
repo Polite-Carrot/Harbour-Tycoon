@@ -58,12 +58,17 @@ On the web the port is a full 3D scene (three.js) you can explore:
 - **Four fun ports past the tenth.** Same economy, whole new worlds
   (`worlds.ts`, `models/vessels.ts`): **Skull Rock Cove**, a pirate cove
   where galleons bring in treasure chests under a skull-shaped crag;
-  **Coral Deep**, a city on the seabed with cargo submarines, mini-sub tugs,
-  kelp, coral and the sea life swimming round; **Tranquility Base** on the
-  moon, with space freighters hovering over a cratered landing field and
-  Earth in the black sky; and **Orbital One**, a space station where
-  freighters dock in the void below a ringed planet, nudged in by thruster
-  drones. Every vessel keeps the container ship's cargo layout, so the
+  **Coral Deep**, a base on the seabed with cargo submarines and mini-sub
+  tugs: glass domes with coral gardens inside, porthole towers, and tubes
+  between them and over the avenues; **Tranquility Base**, a moon base of
+  half-sunk habitat modules, white domes, solar farms, dish masts and
+  landing pads, with space freighters hovering over a cratered landing field
+  and Earth in the black sky; and **Orbital One**, the deck of a huge
+  starship (stepped superstructure with light strips, radiator fins and
+  turrets, a hull stepping down below, a long bow, a bank of glowing engines
+  and the bridge behind town), where freighters dock in the void below a
+  ringed planet, nudged in by thruster drones. These three build their towns
+  in `habitat.ts`. Every vessel keeps the container ship's cargo layout, so the
   cranes work them all the same way.
 - **Sea life.** A dolphin pod porpoises through the harbour, humpback whales
   blow, dive tail-up and breach out at sea, sharks patrol with their fins out,
@@ -154,6 +159,11 @@ minutes in every quarter hour; tap the banner while she's in for a bonus.
 Rewards are paid as minutes of current income, so they matter at every stage.
 Contracts, VIP visits and streak days are all deterministic and seeded from
 the date (local midnight), so they need no server.
+
+**While you were away (rewarded ad).** The popup that greets a returning
+player offers **Watch ad: x3**: watch a rewarded ad and the away earnings
+are tripled (`offline.adMultiplier`), or tap *No thanks* to keep them as
+they are. Closing the ad early keeps the popup, so nothing is lost.
 
 **Time Warp (rewarded ad).** The ⏩ pill in the top-left corner offers a
 day of income at once (current rate × 24h) for watching a rewarded ad: up to

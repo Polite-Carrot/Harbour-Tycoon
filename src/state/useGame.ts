@@ -9,6 +9,7 @@ import {
   catchUp,
   claimContract,
   claimLogin,
+  claimOfflineAdBonus,
   claimTimeWarp,
   claimVip,
   createNewGame,
@@ -242,6 +243,24 @@ export function useGame() {
 
   const dismissOfflineReport = useCallback(() => setOfflineReport(null), []);
 
+  /**
+   * Pay the "while away" ad bonus and close the popup. Returns the extra paid.
+   * Call only after the rewarded ad. Closing the popup with it is what stops
+   * one report being boosted twice.
+   */
+  const boostOfflineReport = useCallback((): number => {
+    const report = offlineReport;
+    if (!report) return 0;
+    let paid = 0;
+    act((s) => {
+      const r = claimOfflineAdBonus(s, report, Date.now());
+      paid = r.earned;
+      return { state: r.state, changed: r.earned > 0 };
+    });
+    setOfflineReport(null);
+    return paid;
+  }, [act, offlineReport]);
+
   return {
     state: snapshot,
     ready,
@@ -251,6 +270,7 @@ export function useGame() {
     choosePort,
     resetGame,
     dismissOfflineReport,
+    boostOfflineReport,
     sell,
     claimDailyLogin,
     claimDailyContract,

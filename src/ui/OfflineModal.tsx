@@ -1,17 +1,31 @@
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { BALANCE } from '../config/balance';
 import { formatDuration, formatMoney } from '../sim/format';
 import type { OfflineReport } from '../sim/types';
 import { theme } from './theme';
 
-/** "While you were away" — shown on resume when offline earnings accrued. */
+/**
+ * "While you were away" — shown on resume when offline earnings accrued.
+ * The earnings are already banked; Collect just closes it. Watching a
+ * rewarded ad multiplies them (x3) instead.
+ */
 export function OfflineModal({
   report,
+  busy = false,
+  hidden = false,
   onDismiss,
+  onWatchAd,
 }: {
   report: OfflineReport | null;
+  /** An ad is loading or playing. */
+  busy?: boolean;
+  /** Hide (but keep) the popup while the ad is on screen. */
+  hidden?: boolean;
   onDismiss: () => void;
+  onWatchAd?: () => void;
 }) {
-  if (!report) return null;
+  if (!report || hidden) return null;
+  const k = BALANCE.offline.adMultiplier;
 
   return (
     <Modal transparent animationType="fade" visible onRequestClose={onDismiss}>
@@ -29,8 +43,27 @@ export function OfflineModal({
             </Text>
           )}
 
-          <Pressable style={styles.button} onPress={onDismiss}>
-            <Text style={styles.buttonText}>Collect</Text>
+          {onWatchAd && (
+            <Pressable
+              onPress={onWatchAd}
+              disabled={busy}
+              style={({ pressed }) => [styles.adButton, busy && styles.disabled, pressed && styles.pressed]}
+              accessibilityRole="button"
+              accessibilityLabel={`Watch an ad to collect ${formatMoney(report.earned * k)}`}
+            >
+              <Text style={styles.adTitle}>{busy ? 'Loading ad…' : `📺  Watch ad: x${k}`}</Text>
+              <Text style={styles.adSub}>Collect +{formatMoney(report.earned * k)}</Text>
+            </Pressable>
+          )}
+
+          <Pressable
+            style={({ pressed }) => [onWatchAd ? styles.plain : styles.button, pressed && styles.pressed]}
+            onPress={onDismiss}
+            disabled={busy}
+          >
+            <Text style={onWatchAd ? styles.plainText : styles.buttonText}>
+              {onWatchAd ? `No thanks, collect +${formatMoney(report.earned)}` : 'Collect'}
+            </Text>
           </Pressable>
         </View>
       </View>
@@ -69,4 +102,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 36,
   },
   buttonText: { color: theme.onAccent, fontSize: 15, fontWeight: '800' },
+  adButton: {
+    marginTop: 12,
+    backgroundColor: theme.money,
+    borderColor: theme.moneyText,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    alignSelf: 'stretch',
+  },
+  adTitle: { color: theme.text, fontSize: 16, fontWeight: '900' },
+  adSub: { color: theme.text, fontSize: 12, fontWeight: '700', marginTop: 2 },
+  plain: { marginTop: 4, paddingVertical: 10, paddingHorizontal: 12 },
+  plainText: { color: theme.textDim, fontSize: 13, fontWeight: '700' },
+  disabled: { opacity: 0.6 },
+  pressed: { opacity: 0.8 },
 });

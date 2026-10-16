@@ -4,6 +4,7 @@ import { COLOURS } from './palette';
 import { trees, type Trees } from './flora';
 import type { Theme } from './theme';
 import { buildCentrepiece, type CentrepieceModel } from './square';
+import { buildHabitats, type HabitatBlock } from './habitat';
 import { glow, hash, mat } from './util';
 
 /**
@@ -570,6 +571,11 @@ export class Town {
   // --- buildings ----------------------------------------------------------------
 
   private buildBlocks() {
+    const kind = this.theme.town.style ?? 'houses';
+    if (kind !== 'houses') {
+      this.buildHabitatBlocks(kind);
+      return;
+    }
     const walls: Instance[] = [];
     const gables: Instance[] = [];
     const caps: Instance[] = [];
@@ -705,6 +711,26 @@ export class Town {
     g.add(instanced(box, mat(0xffffff, { roughness: 0.7 }), awnings));
     g.add(instanced(box, mat(0xffffff, { roughness: 0.5 }), balconies));
     grove.build(g);
+  }
+
+  /** The fun ports: a seabed base, a moon base or a starship's deck (habitat.ts). */
+  private buildHabitatBlocks(kind: Exclude<NonNullable<Theme['town']['style']>, 'houses'>) {
+    const blocks: HabitatBlock[] = [];
+    const yards: Instance[] = [];
+    const isCivic = (col: number, row: number) => col === 5 && row <= 1; // square, town hall
+    for (let col = 0; col < AVENUES_X.length - 1; col++) {
+      for (let row = 0; row < STREETS_Z.length; row++) {
+        if (isCivic(col, row)) continue;
+        const b = blockAt(col, row);
+        const centre = Math.abs((b.x0 + b.x1) / 2);
+        const zone = row <= 1 && centre < 170 ? 'city' : row <= 2 && centre < 300 ? 'town' : 'village';
+        const linkEast = col + 1 < AVENUES_X.length - 1 && !isCivic(col + 1, row);
+        blocks.push({ ...b, zone, linkEast });
+        yards.push({ m: trs((b.x0 + b.x1) / 2, G + KERB + 0.02, (b.z0 + b.z1) / 2, b.x1 - b.x0, 0.04, b.z1 - b.z0), c: this.theme.ground.yard });
+      }
+    }
+    this.group.add(instanced(new THREE.BoxGeometry(1, 1, 1), mat(0xffffff, { roughness: 0.85 }), yards, false));
+    buildHabitats(kind, blocks, G + KERB, this.theme, this.windowMat, this.grove(), this.group);
   }
 
   /** A batch of this town's kind of tree. */
