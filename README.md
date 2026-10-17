@@ -131,7 +131,11 @@ played over weeks.
 **Late upgrades.** Three dear, capped tracks open one after another through
 the third and fourth hours:
 **Rail Link** (container trains run inland along the coast), **Dredging** (a
-grab dredger works the channel, and ships grow a size class) and **Cruise
+grab dredger works off the west of the harbour, and ships grow a size class.
+Its lattice-boom crane swings a clamshell grab out over open water, bites
+into the seabed, hoists the load out dripping, and pours the sand into the
+hopper barge alongside. The pile in her hold grows load by load, and when
+she is full she empties through her bottom doors in a cloud of murky water) and **Cruise
 Terminal** (a terminal hall and a liner alongside). Each one appears in the
 3D harbour when bought.
 
