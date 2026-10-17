@@ -19,7 +19,7 @@ type Height = (x: number, z: number) => number;
 // Swimming material
 // ---------------------------------------------------------------------------
 
-interface Swim {
+export interface Swim {
   phase: { value: number };
   amp: { value: number };
 }
@@ -29,7 +29,7 @@ interface Swim {
  * the tail and grows toward the tail. `lateral` picks fish-style side to side
  * over whale-style up and down.
  */
-function swimMaterial(length: number, lateral: boolean, instanced = false): { material: THREE.MeshStandardMaterial; swim: Swim } {
+export function swimMaterial(length: number, lateral: boolean, instanced = false): { material: THREE.MeshStandardMaterial; swim: Swim } {
   const material = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.38, metalness: 0.05 });
   const swim: Swim = { phase: { value: 0 }, amp: { value: 0.06 } };
   material.onBeforeCompile = (shader) => {
@@ -155,7 +155,7 @@ class Splashes {
 
 /** Orient an object so its +x points along a velocity, with an extra roll. */
 const _e = new THREE.Euler(0, 0, 0, 'YZX');
-function orient(o: THREE.Object3D, vx: number, vy: number, vz: number, roll = 0) {
+export function orient(o: THREE.Object3D, vx: number, vy: number, vz: number, roll = 0) {
   const yaw = Math.atan2(-vz, vx);
   const pitch = Math.atan2(vy, Math.hypot(vx, vz));
   _e.set(roll, yaw, pitch, 'YZX');
@@ -235,7 +235,8 @@ interface School {
 
 /** Something worth looking at, for the "whale spotted" prompt. */
 export interface Sighting {
-  kind: 'whale' | 'dolphins' | 'shark';
+  /** Sea life at sea and on the seabed; aliens on the moon and in orbit (alienlife.ts). */
+  kind: 'whale' | 'dolphins' | 'shark' | 'ufo' | 'spacewhale' | 'aliens';
   position: THREE.Vector3;
   /** Scenery time it happened. */
   at: number;

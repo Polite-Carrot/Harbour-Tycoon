@@ -12,12 +12,15 @@ import type { Sighting } from '../port3d/sealife';
 const BOUNDS = { minX: -420, maxX: 420, minZ: -380, maxZ: 220 };
 /** How long a sighting prompt stays up, and the quiet spell after each kind. */
 const SIGHTING_MS = 9000;
-const SIGHTING_COOLDOWN_MS = { whale: 25000, dolphins: 90000, shark: 90000 } as const;
+const SIGHTING_COOLDOWN_MS = { whale: 25000, dolphins: 90000, shark: 90000, ufo: 40000, spacewhale: 40000, aliens: 60000 } as const;
 
 const SIGHTING_TEXT = {
   whale: '🐋 Whale spotted!',
   dolphins: '🐬 Dolphins leaping!',
   shark: '🦈 Shark fin!',
+  ufo: '🛸 UFO spotted!',
+  spacewhale: '🐋 Space whale!',
+  aliens: '👽 Aliens spotted!',
 } as const;
 const RECENTER_SECONDS = 0.9;
 /** After a Look flight lands, how long until the whale or dolphins peak. */
@@ -134,8 +137,11 @@ export function PortView(props: PortViewProps) {
       const at = world.showcase(lastKind, RECENTER_SECONDS + SHOWCASE_BEAT) ?? lastSeen;
       const target = new THREE.Vector3(at.x, HOME_TARGET.y, at.z);
       // Look out to sea from the harbour side, close enough to see the splash.
+      // Things up in the sky (a UFO, a space whale's arc) want the camera
+      // further back and lower, so they stay in frame above the target.
+      const [dist, height] = lastKind === 'spacewhale' ? [150, 6] : lastKind === 'ufo' ? [80, 6] : lastKind === 'aliens' ? [45, 4] : [60, 32];
       const from = new THREE.Vector3(target.x * 0.6, 0, target.z + 70).sub(target).setY(0).normalize();
-      flyTo(target, target.clone().addScaledVector(from, 60).setY(32));
+      flyTo(target, target.clone().addScaledVector(from, dist).setY(height));
     };
     let sightingId = 0;
     const lastShown: Record<string, number> = {};
