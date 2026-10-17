@@ -84,3 +84,85 @@ describe('fun worlds', () => {
     world.dispose();
   });
 });
+
+describe('Orbital One', () => {
+  it('has no town: the starship stands where it would be', async () => {
+    const THREE = await import('three');
+    const { PortLand } = await import('../port');
+    const { THEMES } = await import('../theme');
+    const space = THEMES.find((t) => t.id === 'space')!;
+    expect(space.town.style).toBe('spaceship');
+    const land = new PortLand(space, new THREE.MeshStandardMaterial());
+    // No town (houses, people, cars, the square): a starship instead.
+    const town = (land as unknown as { town: unknown }).town;
+    const ship = (land as unknown as { spaceship: { group: THREE.Group } | null }).spaceship;
+    expect(town).toBeNull();
+    expect(ship).not.toBeNull();
+    // She is big: longer than the whole dock, rising well above the sheds.
+    const box = new THREE.Box3().setFromObject(ship!.group);
+    expect(box.max.x - box.min.x).toBeGreaterThan(1800);
+    expect(box.max.y).toBeGreaterThan(80);
+    expect(() => (ship as unknown as { update: (t: number) => void }).update(12.3)).not.toThrow();
+  });
+
+  it('never prompts for sea life where there is none', async () => {
+    const { HarbourWorld } = await import('../HarbourWorld');
+    const { THEMES } = await import('../theme');
+    const w = new HarbourWorld();
+    const space = THEMES.find((t) => t.id === 'space')!;
+    (w as unknown as { enter: (t: unknown) => void }).enter(space);
+    const sea = (w as unknown as { sea: { sighting: unknown } }).sea;
+    sea.sighting = { kind: 'dolphins', position: { x: 0, y: 0, z: 0 }, at: 1 };
+    expect(w.takeSighting()).toBeNull();
+  });
+});
+
+describe('cargo pods aboard the starship', () => {
+  it('are exactly container-sized, so they stack and ride the cranes the same', async () => {
+    const THREE = await import('three');
+    const { CONTAINER, containerGeometry, containerMaterial, setCargoColour, setCargoStyle } = await import('../containers');
+    setCargoStyle('pod');
+    try {
+      const g = containerGeometry();
+      g.computeBoundingBox();
+      const size = g.boundingBox!.getSize(new THREE.Vector3());
+      expect(size.x).toBeCloseTo(CONTAINER.length, 2);
+      expect(size.y).toBeCloseTo(CONTAINER.height, 2);
+      expect(size.z).toBeCloseTo(CONTAINER.width, 2);
+      // Only the bands and panels take the cargo colour.
+      const accent = g.getAttribute('accent');
+      const marked = Array.from(accent.array as Float32Array).filter((a) => a === 1).length;
+      expect(marked).toBeGreaterThan(0);
+      expect(marked).toBeLessThan(accent.count / 2);
+      // Repainting a carried pod changes its bands, not its plating.
+      const m = containerMaterial();
+      setCargoColour(m, 0xff0000);
+      expect(m.color.getHex()).toBe(0xffffff);
+      expect((m.userData.podTint as InstanceType<typeof THREE.Color>).getHex()).toBe(0xff0000);
+    } finally {
+      setCargoStyle('container');
+    }
+  });
+});
+
+describe('townsfolk in suits', () => {
+  it('wear space suits on the moon and diving suits on the seabed, clothes elsewhere', async () => {
+    const THREE = await import('three');
+    const { Town } = await import('../town');
+    const { THEMES } = await import('../theme');
+    const crowdOf = (id: string) => {
+      const town = new Town(new THREE.MeshStandardMaterial(), THEMES.find((t) => t.id === id)!);
+      return (town as unknown as { crowd: { visor: unknown; pack: { count: number } | null; hair: { visible: boolean }; dogs: { count: number } } }).crowd;
+    };
+    for (const id of ['moon', 'underwater']) {
+      const c = crowdOf(id);
+      expect(c.visor, id).not.toBeNull();
+      expect(c.pack, id).not.toBeNull();
+      expect(c.hair.visible, id).toBe(false);
+      expect(c.dogs.count, id).toBe(0); // the dogs stay home
+    }
+    const home = crowdOf('temperate');
+    expect(home.visor).toBeNull();
+    expect(home.hair.visible).toBe(true);
+  });
+});

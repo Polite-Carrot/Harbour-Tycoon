@@ -22,7 +22,8 @@ export type Backdrop =
 export type World = 'sea' | 'space' | 'moon' | 'underwater';
 export type ShipKind = 'container' | 'galleon' | 'freighter' | 'submarine';
 export type TugKind = 'tug' | 'drone' | 'minisub';
-export type CargoKind = 'container' | 'chest';
+/** Containers, treasure chests in the pirate cove, cargo pods aboard the starship. */
+export type CargoKind = 'container' | 'chest' | 'pod';
 /** What stands in the middle of the town square. */
 export type Centrepiece =
   | 'fountain' | 'oasis' | 'sculpture' | 'yuletree' | 'gazebo' | 'mosaic' | 'torii' | 'windmill' | 'baobab' | 'spire'
@@ -31,9 +32,11 @@ export type Centrepiece =
 type Range = readonly [number, number];
 /**
  * What the town is built of. 'houses' is every real port; the fun ports
- * build a seabed base, a moon base, or a starship's deck instead (habitat.ts).
+ * build a seabed base or a moon base instead (habitat.ts). Orbital One has
+ * no town at all: 'spaceship' puts a huge starship there, with the dock
+ * along her side (spaceship.ts).
  */
-export type TownStyle = 'houses' | 'seabase' | 'moonbase' | 'starship';
+export type TownStyle = 'houses' | 'seabase' | 'moonbase' | 'spaceship';
 
 export interface Theme {
   id:
@@ -434,6 +437,7 @@ const SPACE: Theme = {
   world: 'space',
   ship: 'freighter',
   tug: 'drone',
+  cargo: 'pod',
   ground: { grass: 0x5c6675, grassDark: 0x4a5361, sand: 0x6e7887, yard: 0x56606e },
   hills: [0x4a5361, 0x5c6675],
   backdrop: 'planet',
@@ -442,7 +446,7 @@ const SPACE: Theme = {
   // Hydroponic trees in planters.
   trees: { town: 'broadleaf', wild: 'none', leaves: [0x20c997, 0x38d9a9, 0x63e6be], trunk: 0x495057 },
   town: {
-    style: 'starship',
+    style: 'spaceship',
     walls: [0xdee2e6, 0xced4da, 0xe9ecef, 0xadb5bd],
     tallWalls: [0x8ec5ff, 0xb2d8ff, 0xdee2e6, 0x74c0fc],
     roofs: [0x22e4ff, 0xff8a1f, 0x9d4bff],

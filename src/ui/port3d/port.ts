@@ -1,13 +1,14 @@
 import * as THREE from 'three';
 import { COLOURS, CONTAINERS } from './palette';
 import { GROUND_Y } from './crane';
-import { containerGeometry, containerMaterial, containerMesh } from './containers';
+import { containerGeometry, containerMaterial, containerMesh, setCargoColour } from './containers';
 import { buildSailboat } from './ship';
 import { Town } from './town';
+import { Spaceship } from './spaceship';
 import { trees } from './flora';
 import { worldOf, type Theme, type World } from './theme';
 import { RTGS, RTG_BOXES, STACK_PITCH, isRtgStack, rtgWork, yardX, yardZ } from './yard';
-import { box, gableRoof, glowSprite, hash, mat, strut } from './util';
+import { Batch, box, gableRoof, glowSprite, hash, mat, strut } from './util';
 
 /** Floodlight masts, centre-out, so the first few light the berth. */
 const MAST_XS = [-30, 30, -90, 90, -145, 145];
@@ -85,7 +86,8 @@ export class PortLand {
   private readonly beamMat: THREE.MeshBasicMaterial;
   private readonly lanternMat: THREE.MeshStandardMaterial;
   private readonly streetGlows: THREE.Sprite[] = [];
-  private town!: Town;
+  private town: Town | null = null;
+  private spaceship: Spaceship | null = null;
   private readonly buoys: { g: THREE.Group; x: number; z: number; light: THREE.Sprite; phase: number }[] = [];
   private readonly trucks: THREE.Group[] = [];
   private readonly rtgs: {
@@ -101,6 +103,10 @@ export class PortLand {
   private readonly gulls: { g: THREE.Group; wl: THREE.Group; wr: THREE.Group; r: number; h: number; speed: number; phase: number; cx: number; cz: number }[] = [];
 
   readonly theme: Theme;
+  /** Orbital One: the dock is a platform on a starship, so it is built like one. */
+  private get aboard() {
+    return this.theme.town.style === 'spaceship';
+  }
   /** Distant windmill sails (the polder backdrop). */
   private readonly mills: THREE.Group[] = [];
 
@@ -148,7 +154,7 @@ export class PortLand {
 
   private buildGround() {
     const g = this.group;
-    const concrete = mat(COLOURS.concrete, { roughness: 0.9 });
+    const concrete = this.aboard ? mat(0x9aa3ae, { roughness: 0.55, metalness: 0.35 }) : mat(COLOURS.concrete, { roughness: 0.9 });
     const grass = mat(this.theme.ground.grass, { roughness: 0.95 });
     const sand = mat(this.theme.ground.sand, { roughness: 1 });
 
@@ -165,12 +171,15 @@ export class PortLand {
       g.add(box(730, 10, 10, sand, side * (170 + 365), GROUND_Y - 7.6, 24));
     }
     this.buildBelow(world);
-    // Everything inland.
-    g.add(box(1800, 12, 900, grass, 0, GROUND_Y - 6, 104 + 450));
+    // Everything inland (Orbital One has her starship there instead, spaceship.ts).
+    if (this.theme.town.style !== 'spaceship') g.add(box(1800, 12, 900, grass, 0, GROUND_Y - 6, 104 + 450));
 
     // Apron, container yard asphalt, and the road around it.
-    const asphalt = mat(COLOURS.asphalt, { roughness: 0.95 });
-    const apron = new THREE.Mesh(new THREE.PlaneGeometry(336, 30), mat(COLOURS.apron, { roughness: 0.9 }));
+    const asphalt = this.aboard ? mat(0x4a5361, { roughness: 0.6, metalness: 0.3 }) : mat(COLOURS.asphalt, { roughness: 0.95 });
+    const apron = new THREE.Mesh(
+      new THREE.PlaneGeometry(336, 30),
+      this.aboard ? mat(0x7f8a99, { roughness: 0.55, metalness: 0.35 }) : mat(COLOURS.apron, { roughness: 0.9 }),
+    );
     apron.rotation.x = -Math.PI / 2;
     apron.position.set(0, GROUND_Y + 0.02, 15);
     apron.receiveShadow = true;
@@ -231,8 +240,6 @@ export class PortLand {
         bowl.position.set(x, -7.95, z);
         g.add(bowl);
       }
-    } else if (world === 'space') {
-      this.buildStarship();
     } else if (world === 'underwater') {
       // The seabed far below, rocks and weed on it, and the quay on pillars.
       g.add(box(3000, 4, 2400, mat(this.theme.ground.grass, { roughness: 1 }), 0, -44, -400));
@@ -252,86 +259,6 @@ export class PortLand {
       const weed = trees('kelp', this.theme.trees.leaves, this.theme.trees.trunk);
       for (let i = 0; i < 120; i++) weed.plant((hash(i * 3.7) - 0.5) * 900, -42, -40 - hash(i * 6.1) * 500, i * 13, 2.2);
       weed.build(g);
-    }
-  }
-
-  /**
-   * Orbital One is a starship: the dock and the town are its deck. Under the
-   * deck, a hull stepping in toward the keel; at the east end a long bow, at
-   * the west a bank of engines glowing blue; and behind the town, the bridge.
-   */
-  private buildStarship() {
-    const g = this.group;
-    const hull = mat(0x5c6675, { roughness: 0.55, metalness: 0.35 });
-    const hullDark = mat(0x464e5b, { roughness: 0.6, metalness: 0.35 });
-    const lights = new THREE.MeshBasicMaterial({ color: 0x22e4ff });
-    const amber = new THREE.MeshBasicMaterial({ color: 0xff8a1f });
-    const top = GROUND_Y - 12; // the underside of the deck
-    // Hull tiers: [width, height, z0, z1]. Each steps in from the one above.
-    const tiers = [
-      [1800, 26, 20, 1004],
-      [1640, 34, 70, 990],
-      [1360, 40, 150, 940],
-      [960, 34, 260, 860],
-    ] as const;
-    let y = top;
-    tiers.forEach(([w, h, z0, z1], i) => {
-      const cz = (z0 + z1) / 2;
-      g.add(box(w, h, z1 - z0, i % 2 ? hullDark : hull, 0, y - h / 2, cz));
-      // Running lights along the front edge of each tier.
-      g.add(box(w - 40, 0.8, 0.6, i % 2 ? amber : lights, 0, y - 2, z0 - 0.3));
-      // Panel seams down the front.
-      for (let x = -w / 2 + 40; x < w / 2 - 20; x += 60) g.add(box(0.8, h - 4, 0.6, hullDark, x, y - h / 2, z0 - 0.3));
-      y -= h;
-    });
-
-    // The bow: a long four-sided spike off the east end.
-    const bowGeo = new THREE.ConeGeometry(1, 1, 4);
-    bowGeo.rotateY(Math.PI / 4);
-    bowGeo.rotateZ(-Math.PI / 2);
-    const bow = new THREE.Mesh(bowGeo, hull);
-    bow.scale.set(520, 70, 760);
-    bow.position.set(900 + 260, GROUND_Y - 34, 512);
-    g.add(bow);
-    g.add(box(10, 2, 700, lights, 905, GROUND_Y - 1, 512));
-
-    // The engines: a block across the west end and five glowing nozzles.
-    g.add(box(180, 110, 820, hullDark, -990, GROUND_Y - 40, 512));
-    const nozzle = mat(0x3a4250, { roughness: 0.4, metalness: 0.6 });
-    const glowDisc = new THREE.MeshBasicMaterial({ color: 0x6fd3ff });
-    for (let k = 0; k < 5; k++) {
-      const z = 512 + (k - 2) * 150;
-      const r = k === 2 ? 62 : 48;
-      const yy = GROUND_Y - 40 + (k % 2 ? 18 : -10);
-      const bell = new THREE.Mesh(new THREE.CylinderGeometry(r, r * 1.25, 70, 28, 1, true), nozzle);
-      bell.rotation.z = Math.PI / 2;
-      bell.position.set(-1115, yy, z);
-      g.add(bell);
-      const disc = new THREE.Mesh(new THREE.CircleGeometry(r * 1.1, 28), glowDisc);
-      disc.rotation.y = -Math.PI / 2;
-      disc.position.set(-1105, yy, z);
-      g.add(disc);
-      const plume = glowSprite(0x6fd3ff, r * 5);
-      plume.position.set(-1170, yy, z);
-      plume.material.opacity = 0.55;
-      g.add(plume);
-    }
-
-    // The bridge: a tall stepped tower behind the town, windows all round.
-    const bx = 0;
-    const bz = 380;
-    g.add(box(260, 26, 90, hull, bx, GROUND_Y + 13, bz));
-    g.add(box(180, 34, 66, hullDark, bx, GROUND_Y + 26 + 17, bz));
-    g.add(box(120, 18, 54, hull, bx, GROUND_Y + 60 + 9, bz));
-    g.add(box(118, 4, 0.6, this.windowMat, bx, GROUND_Y + 70, bz - 27.4));
-    for (let k = 0; k < 4; k++) g.add(box(176, 1.6, 0.6, this.windowMat, bx, GROUND_Y + 32 + k * 6.5, bz - 33.4));
-    g.add(box(250, 0.8, 0.6, lights, bx, GROUND_Y + 25, bz - 45.4));
-    for (const x of [-40, 0, 40]) {
-      const h = x === 0 ? 50 : 30;
-      g.add(box(1, h, 1, hullDark, bx + x, GROUND_Y + 78 + h / 2, bz));
-      const beacon = glowSprite(x === 0 ? 0xff3b30 : 0x22e4ff, 10);
-      beacon.position.set(bx + x, GROUND_Y + 78 + h + 1, bz);
-      g.add(beacon);
     }
   }
 
@@ -380,6 +307,10 @@ export class PortLand {
   }
 
   private buildSheds() {
+    if (this.aboard) {
+      this.buildHangarModules();
+      return;
+    }
     const g = this.group;
     const roofs = [0xff6b6b, 0x4dabf7, 0x51cf66, 0xffd43b];
     for (let i = 0; i < 4; i++) {
@@ -427,8 +358,13 @@ export class PortLand {
       g.add(s);
     }
 
-    this.town = new Town(this.windowMat, this.theme);
-    g.add(this.town.group);
+    if (this.theme.town.style === 'spaceship') {
+      this.spaceship = new Spaceship(this.windowMat);
+      g.add(this.spaceship.group);
+    } else {
+      this.town = new Town(this.windowMat, this.theme);
+      g.add(this.town.group);
+    }
   }
 
   private buildHills() {
@@ -865,9 +801,77 @@ export class PortLand {
     });
   }
 
+  /**
+   * Orbital One's sheds: cargo hangar modules in the starship's plating, with
+   * vaulted roofs, lit bay doors, cyan light strips, and vents and antennas
+   * on top. Same footprint as the sheds, so everything else still fits.
+   */
+  private buildHangarModules() {
+    const g = this.group;
+    const hull = mat(0x7f8a99, { roughness: 0.5, metalness: 0.45 });
+    const hullDark = mat(0x4a5361, { roughness: 0.6, metalness: 0.4 });
+    const light = mat(0xb6bfcb, { roughness: 0.45, metalness: 0.4 });
+    const cyan = new THREE.MeshBasicMaterial({ color: 0x22e4ff });
+    const amber = new THREE.MeshBasicMaterial({ color: 0xff8a1f });
+    const bay = new THREE.MeshBasicMaterial({ color: 0x14325c });
+    const accents = [0x22e4ff, 0xff8a1f, 0x9d4bff, 0x22e4ff];
+    for (let i = 0; i < 4; i++) {
+      const x = -120 + i * 80;
+      const b = new Batch();
+      // Body, a plinth, and a vaulted roof (a half cylinder along the module).
+      b.box(64, 10, 16, hull, x, GROUND_Y + 5, 95);
+      b.box(65, 1.2, 17, hullDark, x, GROUND_Y + 0.6, 95);
+      b.add(new THREE.CylinderGeometry(8.2, 8.2, 64, 20, 1, false, 0, Math.PI), light, x, GROUND_Y + 10, 95, 0, 0, Math.PI / 2);
+      // Rib bands over the vault, and end caps.
+      for (let k = -3; k <= 3; k++) b.add(new THREE.CylinderGeometry(8.5, 8.5, 1, 20, 1, true, 0, Math.PI), hullDark, x + k * 9, GROUND_Y + 10, 95, 0, 0, Math.PI / 2);
+      for (const e of [-1, 1]) b.box(1, 10, 16.4, hullDark, x + e * 32.2, GROUND_Y + 5, 95);
+      // Four lit bay doors facing the yard, each in a cyan frame, with amber guide lights.
+      for (let d = 0; d < 4; d++) {
+        const dx = x - 22 + d * 14.5;
+        b.box(8, 7, 0.3, bay, dx, GROUND_Y + 3.7, 86.9);
+        b.box(8.6, 0.35, 0.4, cyan, dx, GROUND_Y + 7.45, 86.8);
+        for (const e of [-1, 1]) b.box(0.35, 7.4, 0.4, cyan, dx + e * 4.3, GROUND_Y + 3.7, 86.8);
+        b.box(0.8, 0.25, 0.4, amber, dx, GROUND_Y + 0.4, 86.6);
+      }
+      // A light strip along the front, and the window band above the doors.
+      b.box(63, 0.5, 0.3, new THREE.MeshBasicMaterial({ color: accents[i] }), x, GROUND_Y + 9.6, 86.8);
+      b.box(60, 1, 0.3, this.windowMat, x, GROUND_Y + 8.6, 86.85);
+      // Vents and an antenna on the vault.
+      for (const k of [-18, 0, 18]) b.box(5, 1.6, 3, hullDark, x + k, GROUND_Y + 18.2, 95);
+      b.box(0.4, 9, 0.4, hullDark, x + 26, GROUND_Y + 22, 95);
+      g.add(b.build());
+      const beacon = glowSprite(i % 2 ? 0xff3030 : 0x22e4ff, 5);
+      beacon.position.set(x + 26, GROUND_Y + 27, 95);
+      this.streetGlows.push(beacon);
+      g.add(beacon);
+    }
+  }
+
   private buildCustoms(): THREE.Mesh {
     const g = this.customs;
     g.position.set(-150, GROUND_Y, 11);
+    if (this.aboard) {
+      // Aboard the starship: a domed customs control module.
+      const plate = mat(0x9aa3ae, { roughness: 0.5, metalness: 0.4 });
+      g.add(box(18, 8, 12, plate, 0, 4, 0));
+      const dome = new THREE.Mesh(new THREE.SphereGeometry(6.5, 20, 8, 0, Math.PI * 2, 0, Math.PI / 2), mat(0x1d2b3a, { roughness: 0.1, metalness: 0.4 }));
+      dome.position.y = 8;
+      dome.scale.set(1.3, 0.8, 0.9);
+      g.add(dome);
+      g.add(box(14, 1.8, 0.3, this.windowMat, 0, 5.5, -6.1));
+      g.add(box(3.4, 5, 0.3, new THREE.MeshBasicMaterial({ color: 0x14325c }), 0, 2.5, -6.1));
+      g.add(box(18.2, 0.4, 12.2, new THREE.MeshBasicMaterial({ color: 0x22e4ff }), 0, 7.9, 0));
+      g.add(strut(new THREE.Vector3(10, 0, -4), new THREE.Vector3(10, 18, -4), 0.2, mat(0x4a5361)));
+      // A holo-banner in place of a flag.
+      const holoGeo = new THREE.PlaneGeometry(5, 3, 8, 1);
+      holoGeo.translate(2.5, 0, 0);
+      const holo = new THREE.Mesh(holoGeo, new THREE.MeshBasicMaterial({ color: 0x22e4ff, transparent: true, opacity: 0.7, side: THREE.DoubleSide }));
+      holo.position.set(10, 16.2, -4);
+      g.add(holo);
+      g.visible = false;
+      this.group.add(g);
+      return holo;
+    }
     g.add(box(18, 9, 12, mat(0xfff3bf), 0, 4.5, 0));
     const roof = gableRoof(20, 5, 14, mat(0x20c997, { roughness: 0.6 }));
     roof.position.y = 9;
@@ -959,7 +963,7 @@ export class PortLand {
     r.spreader.position.y = w.under;
     r.rope.scale.y = Math.max(0.05, 14 - (w.under + 0.85));
     r.carried.visible = w.carrying !== null;
-    if (w.carrying !== null) (r.carried.material as THREE.MeshStandardMaterial).color.setHex(w.carrying);
+    if (w.carrying !== null) setCargoColour(r.carried.material as THREE.Material, w.carrying);
     const state = w.stacks.map((s) => s.boxes.join('.')).join('|');
     if (state === r.state) return;
     r.state = state;
@@ -1035,7 +1039,8 @@ export class PortLand {
     heightAt: (x: number, z: number) => number,
     tod = 0.5,
   ) {
-    this.town.update(t, lamps, tod);
+    this.town?.update(t, lamps, tod);
+    this.spaceship?.update(t);
 
     // Night glow: windows, lamps, lighthouse.
     this.windowMat.emissiveIntensity = 0.05 + lamps * 1.6;

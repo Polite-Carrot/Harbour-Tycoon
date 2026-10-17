@@ -345,6 +345,11 @@ export class HarbourWorld {
   }
 
   takeSighting(): Sighting | null {
+    // No sea life on the moon or in orbit, so nothing to spot there.
+    if (!WORLDS[worldOf(this.land.theme)].seaLife) {
+      this.sea.sighting = null;
+      return null;
+    }
     const s = this.sea.sighting;
     if (!s || s.at === this.lastSighting) return null;
     this.lastSighting = s.at;
