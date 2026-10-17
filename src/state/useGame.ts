@@ -8,6 +8,7 @@ import {
   buyUpgrade,
   catchUp,
   claimContract,
+  claimEvent,
   claimLogin,
   claimOfflineAdBonus,
   claimTimeWarp,
@@ -224,6 +225,13 @@ export function useGame() {
     });
   }, [act]);
 
+  const collectEvent = useCallback(() => {
+    act((s) => {
+      const r = claimEvent(s, Date.now());
+      return { state: r.state, changed: !!r.reward };
+    });
+  }, [act]);
+
   /** Pay a Time Warp. Returns what it paid (0 if refused). Call after the ad. */
   const warp = useCallback((): number => {
     let paid = 0;
@@ -275,6 +283,7 @@ export function useGame() {
     claimDailyLogin,
     claimDailyContract,
     welcomeVip,
+    collectEvent,
     warp,
   };
 }

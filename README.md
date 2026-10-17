@@ -160,6 +160,22 @@ Rewards are paid as minutes of current income, so they matter at every stage.
 Contracts, VIP visits and streak days are all deterministic and seeded from
 the date (local midnight), so they need no server.
 
+**Random events.** Every five minutes or so something happens in the
+harbour (`src/sim/events.ts`, drawn by `src/ui/port3d/harbourEvents.ts`).
+Tap the banner before it passes:
+
+| event | how often | tap for |
+|---|---|---|
+| Container overboard (a cargo pod adrift, off-world) | common | 4 min of income |
+| Storm rolling in: rain, lightning and a grey sky at sea; a meteor shower on the moon and in orbit; a current surge of bubbles on the seabed | common | 8 min of income |
+| Celebrity superyacht (a sub or starliner, off-world), with camera flashes | sometimes | 3 min of income and double income for 5 min |
+| Golden ship, sparkling as it sails past | rare | 30 min of income |
+
+Events are seeded from the clock like the VIP ship, so they are the same on
+every device and need no server, and they never overlap a VIP visit. Each
+pays once (`lastEventSlot` in the save). Odds, lengths and payouts are in
+`events` in `balance.ts`.
+
 **While you were away (rewarded ad).** The popup that greets a returning
 player offers **Watch ad: x3**: watch a rewarded ad and the away earnings
 are tripled (`offline.adMultiplier`), or tap *No thanks* to keep them as

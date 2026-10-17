@@ -6,6 +6,7 @@ import { berthMoment } from '../port/timeline';
 import { berthWork, slotColour, slotKey, variantOf } from './cargo';
 import { Crane, HOIST_TOP, PARK_Z, pileSpot, type SpotResolver } from './crane';
 import { CruiseTerminal, Dredger, RailLink, TallShip } from './expansions';
+import { HarbourEvents, stormLevel } from './harbourEvents';
 import { liveryFor } from './palette';
 import { PortLand } from './port';
 import { berthZ as berthZOf, shipsAt, tugCount, tugsAt } from './berthing';
@@ -24,6 +25,8 @@ export interface WorldInput {
   stats: DerivedStats;
   /** Epoch millis the port state is accurate as of. */
   lastTickAt: number;
+  /** Harbour event last collected (events.ts). */
+  lastEventSlot?: number;
 }
 
 /** The point the camera looks at when it is centred on the berth. */
@@ -74,6 +77,7 @@ export class HarbourWorld {
   private readonly dredger = new Dredger();
   private readonly terminal: CruiseTerminal;
   private readonly tallShip = new TallShip();
+  private readonly events = new HarbourEvents();
   private lastSighting = -99;
   private readonly tmp = new THREE.Vector3();
   private readonly tmp2 = new THREE.Vector3();
@@ -88,7 +92,7 @@ export class HarbourWorld {
     s.fog = this.fog;
     s.add(this.skyLayer.group, this.water.group, this.land.group, this.craneGroup, this.sea.group);
     this.terminal = new CruiseTerminal(this.windowMat);
-    s.add(this.rail.group, this.dredger.group, this.terminal.group, this.tallShip.group);
+    s.add(this.rail.group, this.dredger.group, this.terminal.group, this.tallShip.group, this.events.group);
     this.dredger.onSplash = (x, y, z, power) => this.sea.splash(x, y, z, power);
 
     s.add(this.hemi);
@@ -174,7 +178,7 @@ export class HarbourWorld {
 
     // --- sky and light -------------------------------------------------------
     const tod = timeOfDay(now);
-    const sky = (this.sky = worldSky(worldOf(theme), skyAt(tod)));
+    const sky = (this.sky = stormy(worldSky(worldOf(theme), skyAt(tod)), worldOf(theme) === 'sea' ? stormLevel(now) : 0));
     this.skyLayer.update(sky, tod, dt, camera);
     this.fog.color.setHex(sky.horizon);
     this.hemi.color.setHex(sky.hemiSky);
@@ -246,6 +250,10 @@ export class HarbourWorld {
       this.terminal.group.visible = false;
     }
     this.tallShip.update(t, now, heightAt);
+    // Random harbour events (sim/events.ts); a storm darkens the day.
+    this.events.update(t, now, worldOf(theme), input.lastEventSlot, heightAt);
+    // Off-world "storms" (meteors, a current surge) dim the light a little.
+    if (this.events.storm > 0 && !look.sea) this.keyLight.intensity *= 1 - 0.3 * this.events.storm;
 
     // --- tugs ------------------------------------------------------------------
     // Always one tug, a pair from level 4. They meet each ship, push her in,
@@ -370,4 +378,22 @@ function placeRope(rope: THREE.Mesh, a: THREE.Vector3, b: THREE.Vector3) {
   rope.position.y -= Math.min(1.2, len * 0.04);
   rope.quaternion.setFromUnitVectors(UP, _dir.normalize());
   rope.scale.set(1, len, 1);
+}
+
+const _a = new THREE.Color();
+const _b = new THREE.Color();
+const grey = (from: number, to: number, k: number) => _a.setHex(from).lerp(_b.setHex(to), k).getHex();
+
+/** A storm at sea: a low grey sky, a dark sea, a dimmer sun and the lamps coming on. */
+function stormy(sky: Sky, k: number): Sky {
+  if (k <= 0) return sky;
+  return {
+    ...sky,
+    zenith: grey(sky.zenith, 0x3b4654, 0.85 * k),
+    horizon: grey(sky.horizon, 0x6b7785, 0.8 * k),
+    water: grey(sky.water, 0x3d5566, 0.7 * k),
+    sunIntensity: sky.sunIntensity * (1 - 0.6 * k),
+    hemiIntensity: sky.hemiIntensity * (1 - 0.35 * k),
+    lamps: Math.max(sky.lamps, 0.6 * k),
+  };
 }

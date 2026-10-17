@@ -16,6 +16,7 @@ import { DailyModal, dailyBadge } from './src/ui/DailyModal';
 import { HeadOfficeModal } from './src/ui/HeadOfficeModal';
 import { MetaBar } from './src/ui/MetaBar';
 import { VipBanner } from './src/ui/VipBanner';
+import { EventBanner } from './src/ui/EventBanner';
 import { starsFor } from './src/sim/prestige';
 import { today } from './src/state/useGame';
 import { useRewardedAd } from './src/ads/rewardedAd';
@@ -40,6 +41,7 @@ export default function App() {
     claimDailyLogin,
     claimDailyContract,
     welcomeVip,
+    collectEvent,
     warp,
   } = useGame();
   const ad = useRewardedAd();
@@ -114,6 +116,7 @@ export default function App() {
           portIndex={view.index}
           stats={view.stats}
           lastTickAt={state.lastTickAt}
+          lastEventSlot={state.lastEventSlot}
           warpStartedAt={warpStartedAt}
         />
         <Hud
@@ -127,6 +130,7 @@ export default function App() {
           boostUntil={state.boostUntil}
         />
         <VipBanner state={state} now={Date.now()} onWelcome={welcomeVip} />
+        <EventBanner state={state} portIndex={view.index} now={Date.now()} onCollect={collectEvent} />
         <TimeWarpButton state={state} day={today()} now={Date.now()} onPress={() => setWarpOpen(true)} />
         <SettingsButton onPress={() => setSettingsOpen(true)} />
       </View>

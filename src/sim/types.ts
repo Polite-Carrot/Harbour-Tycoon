@@ -83,6 +83,8 @@ export interface GameState {
   daily: DailyState;
   /** Epoch millis an income boost runs until (0 = none). */
   boostUntil: number;
+  /** Harbour event last collected (events.ts), so each one pays once. */
+  lastEventSlot: number;
   /** Lifetime counters, kept across resets. */
   totals: { ships: number; upgrades: number };
   timeWarp: TimeWarpState;
