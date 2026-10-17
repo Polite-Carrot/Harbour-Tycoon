@@ -21,6 +21,8 @@ export type UpgradeId =
   | 'dredging'
   | 'cruise';
 
+export type HarbourEventKind = 'container' | 'storm' | 'celebrity' | 'golden';
+
 export interface UpgradeConfig {
   readonly id: UpgradeId;
   readonly name: string;
@@ -107,6 +109,26 @@ export interface BalanceConfig {
     readonly starScale: number;
     /** Permanent income bonus per star, additive: 0.1 = +10% each. */
     readonly incomePerStar: number;
+  };
+  /**
+   * Random harbour events: a lost container, a celebrity superyacht, a
+   * storm, a golden ship. One may happen in each period, at a seeded time,
+   * never during a VIP visit; tap the banner while it is on to collect.
+   */
+  readonly events: {
+    readonly periodSeconds: number;
+    /** Chance a period has an event at all. */
+    readonly chance: number;
+    readonly kinds: Readonly<Record<HarbourEventKind, {
+      /** Relative odds among the kinds. */
+      readonly weight: number;
+      /** How long it lasts. */
+      readonly seconds: number;
+      /** Minutes of income paid when tapped. */
+      readonly minutes: number;
+      /** Seconds of double income granted when tapped (0 = none). */
+      readonly boostSeconds: number;
+    }>>;
   };
   /** Reasons to come back every day. */
   readonly daily: {
@@ -386,6 +408,19 @@ export const BALANCE: BalanceConfig = {
     minEarnings: 1e6,
     starScale: 5,
     incomePerStar: 0.1,
+  },
+
+  events: {
+    // Roughly one every six or seven minutes of play, each up to a minute.
+    periodSeconds: 5 * 60,
+    chance: 0.8,
+    kinds: {
+      container: { weight: 4, seconds: 50, minutes: 4, boostSeconds: 0 },
+      storm: { weight: 3, seconds: 60, minutes: 8, boostSeconds: 0 },
+      celebrity: { weight: 2, seconds: 60, minutes: 3, boostSeconds: 5 * 60 },
+      // Rare and rich.
+      golden: { weight: 1, seconds: 40, minutes: 30, boostSeconds: 0 },
+    },
   },
 
   daily: {

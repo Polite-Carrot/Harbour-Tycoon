@@ -26,6 +26,7 @@ import {
   startingLevels,
   startingMoney,
 } from './prestige';
+import { activeEvent, eventReward } from './events';
 import { warpReward, warpStatus, warpsUsedToday } from './timewarp';
 import {
   SAVE_VERSION,
@@ -67,6 +68,7 @@ export function createNewGame(
     prestige: { stars: 0, resets: 0, bestRun: 0 },
     daily: emptyDaily(),
     boostUntil: 0,
+    lastEventSlot: -1,
     totals: { ships: 0, upgrades: 0 },
     timeWarp: { day: -1, used: 0, lastAt: 0 },
   };
@@ -354,6 +356,18 @@ export function claimContract(
   return { state: applyReward({ ...state, daily: { ...state.daily, contracts } }, reward, now), reward };
 }
 
+/** Collect the harbour event on right now (events.ts), if there is one. */
+export function claimEvent(
+  state: GameState,
+  now: number,
+  cfg: BalanceConfig = BALANCE,
+): { state: GameState; reward: Reward | null } {
+  const ev = activeEvent(state, now, cfg);
+  if (!ev) return { state, reward: null };
+  const reward = eventReward(ev.kind, totalIncome(state, cfg), dailyRewardMultiplier(state), cfg);
+  return { state: applyReward({ ...state, lastEventSlot: ev.slot }, reward, now), reward };
+}
+
 /** Welcome the VIP ship in port right now, if there is one. */
 export function claimVip(
   state: GameState,
@@ -529,6 +543,7 @@ export function sanitise(
       lastVipSlot: Math.floor(num(d.lastVipSlot, -1)),
     },
     boostUntil: Math.max(0, num(r.boostUntil, 0)),
+    lastEventSlot: Math.floor(num(r.lastEventSlot, -1)),
     totals: {
       ships: Math.max(0, num(t.ships, 0)),
       upgrades: Math.max(0, num(t.upgrades, 0)),
