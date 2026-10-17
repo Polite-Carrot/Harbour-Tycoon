@@ -158,6 +158,21 @@ she is full she empties through her bottom doors in a cloud of murky water) and 
 Terminal** (a terminal hall and a liner alongside). Each one appears in the
 3D harbour when bought.
 
+**Managers.** The 👷 Managers button opens your staff (`src/sim/managers.ts`).
+Hire each one with money, then promote them level by level:
+
+| manager | per level | top level |
+|---|---|---|
+| 👷 Sal, Dock Boss | +10% income at every port | 10 (+100%) |
+| ⚓ Mara, Port Captain | offline earnings build up 30 min longer | 8 (+4h) |
+| 🎉 Pip, Events Manager | +20% on events, VIP ships, daily rewards and contracts | 10 (+200%) |
+| 💼 Finch, Broker | new ports 8% cheaper (compounding) | 8 (~49% off) |
+
+Hiring starts at $1.5K–$15K and each promotion costs 6–8× the last, so the
+top levels are late-run goals. The bonuses run through the same helpers as
+the Head Office perks (`prestige.ts`), so every payout and price includes
+them. Managers work for the company: selling it lets them go.
+
 **Head Office (prestige).** Once a run has earned $1M, the company can be sold
 for Reputation stars. Stars are permanent: each adds +10% income on every port,
 for good. Star milestones unlock perks:

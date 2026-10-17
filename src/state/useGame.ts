@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Platform, type AppStateStatus } from 'react-native';
-import { BALANCE, type UpgradeId } from '../config/balance';
+import { BALANCE, type ManagerId, type UpgradeId } from '../config/balance';
+import { hireManager } from '../sim/managers';
 import { dayIndex, rollDay } from '../sim/daily';
 import { totalIncome } from '../sim/economy';
 import {
@@ -225,6 +226,17 @@ export function useGame() {
     });
   }, [act]);
 
+  /** Hire a manager, or promote one already working for you. */
+  const hire = useCallback(
+    (id: ManagerId) => {
+      act((s) => {
+        const r = hireManager(s, id);
+        return { state: r.state, changed: r.hired };
+      });
+    },
+    [act],
+  );
+
   /** Collect the event on now; `ad` after a rewarded ad, from when it was tapped. */
   const collectEvent = useCallback((opts: { ad?: boolean; tappedAt?: number } = {}) => {
     act((s) => {
@@ -285,6 +297,7 @@ export function useGame() {
     claimDailyContract,
     welcomeVip,
     collectEvent,
+    hire,
     warp,
   };
 }

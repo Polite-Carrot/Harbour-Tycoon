@@ -1,4 +1,4 @@
-import { BALANCE, UPGRADE_ORDER, type BalanceConfig, type UpgradeId } from '../config/balance';
+import { BALANCE, UPGRADE_ORDER, type BalanceConfig, type ManagerId, type UpgradeId } from '../config/balance';
 import {
   activeVip,
   canClaimLogin,
@@ -27,6 +27,7 @@ import {
   startingMoney,
 } from './prestige';
 import { activeEvent, eventReward } from './events';
+import { MANAGER_ORDER, emptyManagers } from './managers';
 import { warpReward, warpStatus, warpsUsedToday } from './timewarp';
 import {
   SAVE_VERSION,
@@ -69,6 +70,7 @@ export function createNewGame(
     daily: emptyDaily(),
     boostUntil: 0,
     lastEventSlot: -1,
+    managers: emptyManagers(),
     totals: { ships: 0, upgrades: 0 },
     timeWarp: { day: -1, used: 0, lastAt: 0 },
   };
@@ -308,6 +310,8 @@ export function sellCompany(
     ports: [],
     activePort: 0,
     lastTickAt: now,
+    // The managers were the old company's staff.
+    managers: emptyManagers(),
   };
   // Perks read the NEW star total, so a sale that crosses a milestone pays out
   // its perk straight away.
@@ -492,6 +496,13 @@ function migrateLegacy(r: Record<string, unknown>): Record<string, unknown> {
   };
 }
 
+function sanitiseManagers(raw: unknown, cfg: BalanceConfig): Record<ManagerId, number> {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  const out = emptyManagers();
+  for (const id of MANAGER_ORDER) out[id] = Math.min(cfg.managers[id].maxLevel, Math.max(0, Math.floor(num(r[id], 0))));
+  return out;
+}
+
 export function sanitise(
   raw: unknown,
   now: number = Date.now(),
@@ -553,6 +564,7 @@ export function sanitise(
     },
     boostUntil: Math.max(0, num(r.boostUntil, 0)),
     lastEventSlot: Math.floor(num(r.lastEventSlot, -1)),
+    managers: sanitiseManagers(r.managers, cfg),
     totals: {
       ships: Math.max(0, num(t.ships, 0)),
       upgrades: Math.max(0, num(t.upgrades, 0)),
