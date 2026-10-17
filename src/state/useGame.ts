@@ -225,9 +225,10 @@ export function useGame() {
     });
   }, [act]);
 
-  const collectEvent = useCallback(() => {
+  /** Collect the event on now; `ad` after a rewarded ad, from when it was tapped. */
+  const collectEvent = useCallback((opts: { ad?: boolean; tappedAt?: number } = {}) => {
     act((s) => {
-      const r = claimEvent(s, Date.now());
+      const r = claimEvent(s, Date.now(), BALANCE, opts);
       return { state: r.state, changed: !!r.reward };
     });
   }, [act]);

@@ -361,10 +361,19 @@ export function claimEvent(
   state: GameState,
   now: number,
   cfg: BalanceConfig = BALANCE,
+  opts: {
+    /** Watched the rewarded ad: pay `events.adMultiplier` times as much. */
+    ad?: boolean;
+    /** When the player tapped. The ad takes a while, and an event that ends
+     *  while it plays still pays, as long as it was on when they tapped. */
+    tappedAt?: number;
+  } = {},
 ): { state: GameState; reward: Reward | null } {
-  const ev = activeEvent(state, now, cfg);
+  const tapped = Math.min(opts.tappedAt ?? now, now);
+  const ev = activeEvent(state, tapped, cfg);
   if (!ev) return { state, reward: null };
-  const reward = eventReward(ev.kind, totalIncome(state, cfg), dailyRewardMultiplier(state), cfg);
+  const mult = dailyRewardMultiplier(state) * (opts.ad ? cfg.events.adMultiplier : 1);
+  const reward = eventReward(ev.kind, totalIncome(state, cfg), mult, cfg);
   return { state: applyReward({ ...state, lastEventSlot: ev.slot }, reward, now), reward };
 }
 

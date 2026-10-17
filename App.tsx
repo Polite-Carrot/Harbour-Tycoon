@@ -61,6 +61,15 @@ export default function App() {
       setWarpStartedAt(performance.now());
     }
   };
+  const [eventAdBusy, setEventAdBusy] = useState(false);
+  const watchForEventBonus = async () => {
+    // Pays as of the tap, so an event that ends during the ad still counts.
+    const tappedAt = Date.now();
+    setEventAdBusy(true);
+    const rewarded = await ad.show();
+    setEventAdBusy(false);
+    if (rewarded) collectEvent({ ad: true, tappedAt });
+  };
   const [offlineAdBusy, setOfflineAdBusy] = useState(false);
   const watchForOfflineBonus = async () => {
     setOfflineAdBusy(true);
@@ -130,7 +139,14 @@ export default function App() {
           boostUntil={state.boostUntil}
         />
         <VipBanner state={state} now={Date.now()} onWelcome={welcomeVip} />
-        <EventBanner state={state} portIndex={view.index} now={Date.now()} onCollect={collectEvent} />
+        <EventBanner
+          state={state}
+          portIndex={view.index}
+          now={Date.now()}
+          busy={eventAdBusy}
+          onCollect={() => collectEvent()}
+          onWatchAd={watchForEventBonus}
+        />
         <TimeWarpButton state={state} day={today()} now={Date.now()} onPress={() => setWarpOpen(true)} />
         <SettingsButton onPress={() => setSettingsOpen(true)} />
       </View>

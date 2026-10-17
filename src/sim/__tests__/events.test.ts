@@ -4,6 +4,7 @@ import { vipWindow } from '../daily';
 import { claimEvent, createNewGame } from '../engine';
 import { activeEvent, eventReward, eventWindow } from '../events';
 import { totalIncome } from '../economy';
+import { SUNRISE, SUNSET, timeOfDay } from '../../ui/port/daylight';
 
 const period = BALANCE.events.periodSeconds * 1000;
 const DAY = 86_400_000;
@@ -29,7 +30,7 @@ describe('harbour events', () => {
 
   it('come in every kind, the golden ship the rarest', () => {
     const count = (k: string) => week.filter((e) => e.kind === k).length;
-    for (const k of ['container', 'storm', 'celebrity', 'golden']) expect(count(k)).toBeGreaterThan(0);
+    for (const k of ['container', 'storm', 'celebrity', 'golden', 'fireworks', 'pirates']) expect(count(k)).toBeGreaterThan(0);
     expect(count('golden')).toBeLessThan(count('container'));
     expect(count('golden')).toBeLessThan(count('storm'));
   });
@@ -76,5 +77,31 @@ describe('harbour events', () => {
     const pay = (k: 'container' | 'storm' | 'celebrity' | 'golden') => eventReward(k, 100).money;
     expect(pay('golden')).toBeGreaterThan(pay('storm'));
     expect(pay('storm')).toBeGreaterThan(pay('container'));
+  });
+
+  it('only lets fireworks off after dark, start to finish', () => {
+    const shows = week.filter((e) => e.kind === 'fireworks');
+    expect(shows.length).toBeGreaterThan(10);
+    const dark = (ms: number) => {
+      const tod = timeOfDay(ms);
+      return tod >= SUNSET + 0.08 || tod <= SUNRISE - 0.03;
+    };
+    for (const e of shows) {
+      for (let at = e.start; at <= e.end; at += 5000) expect(dark(at)).toBe(true);
+    }
+  });
+
+  it('pays double after the ad, even if the event ended while it played', () => {
+    const e = week.find((w) => w.kind === 'pirates')!;
+    const s = createNewGame(0, BALANCE);
+    const plain = claimEvent(s, e.start + 1000, BALANCE).reward!.money;
+    const tappedAt = e.end - 2000;
+    // The ad finishes after the pirates have gone.
+    const r = claimEvent(s, e.end + 20_000, BALANCE, { ad: true, tappedAt });
+    expect(r.reward!.money).toBeCloseTo(plain * BALANCE.events.adMultiplier, 6);
+    // But a tap after the event does not count.
+    expect(claimEvent(s, e.end + 20_000, BALANCE, { ad: true, tappedAt: e.end + 1 }).reward).toBeNull();
+    // And it still pays once.
+    expect(claimEvent(r.state, e.end - 1000, BALANCE).reward).toBeNull();
   });
 });

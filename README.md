@@ -170,6 +170,12 @@ Tap the banner before it passes:
 | Storm rolling in: rain, lightning and a grey sky at sea; a meteor shower on the moon and in orbit; a current surge of bubbles on the seabed | common | 8 min of income |
 | Celebrity superyacht (a sub or starliner, off-world), with camera flashes | sometimes | 3 min of income and double income for 5 min |
 | Golden ship, sparkling as it sails past | rare | 30 min of income |
+| Fireworks night over the town (a jellyfish light show on the seabed), only ever after dark | sometimes | 3 min of income and double income for 2 min |
+| Pirates off the coast: a black-sailed galleon firing its cannons (a pirate sub, or space pirates firing red bolts) | sometimes | 10 min of income |
+
+Every event banner also has a **📺 x2** button: watch a rewarded ad to
+double the reward. It pays as of the moment you tapped, so an event that
+ends while the ad plays still counts.
 
 Events are seeded from the clock like the VIP ship, so they are the same on
 every device and need no server, and they never overlap a VIP visit. Each

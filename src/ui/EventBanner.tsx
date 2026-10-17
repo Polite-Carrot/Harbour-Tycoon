@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import type { HarbourEventKind } from '../config/balance';
+import { BALANCE, type HarbourEventKind } from '../config/balance';
 import { totalIncome } from '../sim/economy';
 import { activeEvent, eventReward } from '../sim/events';
 import { formatDuration, formatMoney, formatSeconds } from '../sim/format';
@@ -26,6 +26,16 @@ const COPY: Record<HarbourEventKind, (w: World) => { icon: string; title: string
         ? { icon: '🛥️', title: 'Celebrity submarine!', action: 'Red carpet' }
         : { icon: '🚀', title: 'Celebrity starliner!', action: 'Red carpet' },
   golden: () => ({ icon: '✨', title: 'Golden ship sighted!', action: 'Claim' }),
+  fireworks: (w) =>
+    w === 'underwater'
+      ? { icon: '🪼', title: 'Jellyfish light show!', action: 'Join the party' }
+      : { icon: '🎆', title: 'Fireworks night!', action: 'Join the party' },
+  pirates: (w) =>
+    w === 'sea'
+      ? { icon: '🏴‍☠️', title: 'Pirates off the coast!', action: 'Fire the cannons' }
+      : w === 'underwater'
+        ? { icon: '🏴‍☠️', title: 'Pirate sub sighted!', action: 'Sound the alarm' }
+        : { icon: '🏴‍☠️', title: 'Space pirates!', action: 'Fire the lasers' },
 };
 
 const COLOURS: Record<HarbourEventKind, { bg: string; border: string; sub: string }> = {
@@ -33,6 +43,8 @@ const COLOURS: Record<HarbourEventKind, { bg: string; border: string; sub: strin
   storm: { bg: '#334155', border: '#facc15', sub: '#e2e8f0' },
   celebrity: { bg: '#be185d', border: '#fbcfe8', sub: '#fce7f3' },
   golden: { bg: '#a16207', border: '#fde047', sub: '#fef9c3' },
+  fireworks: { bg: '#4c1d95', border: '#f0abfc', sub: '#f5d0fe' },
+  pirates: { bg: '#1c1917', border: '#ef4444', sub: '#fecaca' },
 };
 
 /**
@@ -43,12 +55,18 @@ export function EventBanner({
   state,
   portIndex,
   now,
+  busy = false,
   onCollect,
+  onWatchAd,
 }: {
   state: GameState;
   portIndex: number;
   now: number;
+  /** A rewarded ad is loading or playing. */
+  busy?: boolean;
   onCollect: () => void;
+  /** Watch an ad to collect `events.adMultiplier` times as much. */
+  onWatchAd?: () => void;
 }) {
   const ev = activeEvent(state, now);
   if (!ev) return null;
@@ -77,12 +95,23 @@ export function EventBanner({
           {copy.action} +{formatMoney(reward.money)}
         </Text>
       </Pressable>
+      {onWatchAd && (
+        <Pressable
+          onPress={onWatchAd}
+          disabled={busy}
+          style={({ pressed }) => [styles.ad, { borderColor: colour.border }, (pressed || busy) && styles.pressed]}
+          accessibilityRole="button"
+          accessibilityLabel={`Watch an ad for ${formatMoney(reward.money * BALANCE.events.adMultiplier)}`}
+        >
+          <Text style={styles.adText}>{busy ? '…' : `📺 x${BALANCE.events.adMultiplier}`}</Text>
+        </Pressable>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { position: 'absolute', top: 124, left: 0, right: 0, alignItems: 'center' },
+  wrap: { position: 'absolute', top: 124, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
   banner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -92,8 +121,19 @@ const styles = StyleSheet.create({
     paddingRight: 6,
     paddingVertical: 6,
     borderWidth: 2,
-    marginHorizontal: 16,
+    marginLeft: 16,
+    flexShrink: 1,
   },
+  ad: {
+    marginLeft: 6,
+    marginRight: 16,
+    backgroundColor: '#ffd23f',
+    borderWidth: 2,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+  },
+  adText: { color: '#1f2937', fontSize: 12, fontWeight: '900' },
   pressed: { opacity: 0.85 },
   icon: { fontSize: 20 },
   text: { flexShrink: 1 },
