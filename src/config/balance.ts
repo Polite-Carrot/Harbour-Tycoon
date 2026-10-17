@@ -21,7 +21,7 @@ export type UpgradeId =
   | 'dredging'
   | 'cruise';
 
-export type HarbourEventKind = 'container' | 'storm' | 'celebrity' | 'golden';
+export type HarbourEventKind = 'container' | 'storm' | 'celebrity' | 'golden' | 'fireworks' | 'pirates';
 
 export interface UpgradeConfig {
   readonly id: UpgradeId;
@@ -119,6 +119,8 @@ export interface BalanceConfig {
     readonly periodSeconds: number;
     /** Chance a period has an event at all. */
     readonly chance: number;
+    /** Watching a rewarded ad multiplies an event's reward by this. */
+    readonly adMultiplier: number;
     readonly kinds: Readonly<Record<HarbourEventKind, {
       /** Relative odds among the kinds. */
       readonly weight: number;
@@ -414,12 +416,16 @@ export const BALANCE: BalanceConfig = {
     // Roughly one every six or seven minutes of play, each up to a minute.
     periodSeconds: 5 * 60,
     chance: 0.8,
+    adMultiplier: 2,
     kinds: {
       container: { weight: 4, seconds: 50, minutes: 4, boostSeconds: 0 },
       storm: { weight: 3, seconds: 60, minutes: 8, boostSeconds: 0 },
       celebrity: { weight: 2, seconds: 60, minutes: 3, boostSeconds: 5 * 60 },
       // Rare and rich.
       golden: { weight: 1, seconds: 40, minutes: 30, boostSeconds: 0 },
+      // Only after dark (events.ts slides it into the night).
+      fireworks: { weight: 2, seconds: 45, minutes: 3, boostSeconds: 2 * 60 },
+      pirates: { weight: 2, seconds: 50, minutes: 10, boostSeconds: 0 },
     },
   },
 

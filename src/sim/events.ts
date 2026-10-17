@@ -1,11 +1,14 @@
 import { BALANCE, type BalanceConfig, type HarbourEventKind } from '../config/balance';
 import { vipWindow, type Reward } from './daily';
+// The harbour clock is pure maths shared with the scene; fireworks need dark.
+import { SUNRISE, SUNSET, timeOfDay } from '../ui/port/daylight';
 import type { GameState } from './types';
 
 /**
  * Random harbour events. Each period may hold one: a container lost
  * overboard to fish out, a celebrity superyacht calling, a storm to batten
- * down for, or (rarely) a golden ship. Tap the banner while it is on to
+ * down for, pirates to see off, fireworks after dark, or (rarely) a golden
+ * ship. Tap the banner while it is on to
  * collect; each one pays once.
  *
  * "Random" but deterministic, like the VIP visits: the kind and the time
@@ -29,7 +32,13 @@ const seeded = (n: number) => {
   return s - Math.floor(s);
 };
 
-const KINDS: readonly HarbourEventKind[] = ['container', 'storm', 'celebrity', 'golden'];
+const KINDS: readonly HarbourEventKind[] = ['container', 'storm', 'celebrity', 'golden', 'fireworks', 'pirates'];
+
+/** Fully dark at this moment on the harbour clock (no dusk or dawn). */
+const isNight = (ms: number) => {
+  const tod = timeOfDay(ms);
+  return tod >= SUNSET + 0.08 || tod <= SUNRISE - 0.03;
+};
 
 /** The event scheduled in the period containing `nowMs`, if there is one (active or not). */
 export function eventWindow(nowMs: number, cfg: BalanceConfig = BALANCE): HarbourEvent | null {
@@ -49,7 +58,24 @@ export function eventWindow(nowMs: number, cfg: BalanceConfig = BALANCE): Harbou
     }
   }
   const length = e.kinds[kind].seconds * 1000;
-  const start = slot * period + Math.floor(seeded(slot * 4.19) * (period - length));
+  let start = slot * period + Math.floor(seeded(slot * 4.19) * (period - length));
+  if (kind === 'fireworks') {
+    // Slide forward (wrapping round the period) to the first stretch that is
+    // dark from start to end. A harbour night is longer than the show, and
+    // every period holds one, so this always finds a spot.
+    const first = slot * period;
+    const span = period - length;
+    let found = -1;
+    for (let step = 0; step <= span; step += 5000) {
+      const at = first + ((start - first + step) % (span + 1));
+      if (isNight(at) && isNight(at + length / 2) && isNight(at + length)) {
+        found = at;
+        break;
+      }
+    }
+    if (found < 0) return null;
+    start = found;
+  }
   const end = start + length;
 
   // Stand aside for the VIP ship.
