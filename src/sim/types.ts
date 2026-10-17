@@ -1,4 +1,4 @@
-import type { UpgradeId } from '../config/balance';
+import type { ManagerId, UpgradeId } from '../config/balance';
 
 /**
  * Current save schema version.
@@ -85,6 +85,8 @@ export interface GameState {
   boostUntil: number;
   /** Harbour event last collected (events.ts), so each one pays once. */
   lastEventSlot: number;
+  /** Manager levels (managers.ts); 0 = not hired. Reset when the company is sold. */
+  managers: Record<ManagerId, number>;
   /** Lifetime counters, kept across resets. */
   totals: { ships: number; upgrades: number };
   timeWarp: TimeWarpState;
