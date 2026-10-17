@@ -11,9 +11,6 @@ import { hash, mat } from './util';
  *                 and over the avenues from block to block.
  *  - 'moonbase' — habitat modules half-sunk in the regolith, white domes,
  *                 solar arrays, dish masts and landing pads.
- *  - 'starship' — the deck of a huge spaceship: stepped superstructure with
- *                 light strips and window rows, radiator fins, turrets and
- *                 antennas. (port.ts builds the hull under it.)
  *
  * Same street grid, square and town hall as everywhere else, so people,
  * traffic and the square still work; only the buildings change. Every part
@@ -90,7 +87,7 @@ class Parts {
 }
 
 export function buildHabitats(
-  style: Exclude<TownStyle, 'houses'>,
+  style: Exclude<TownStyle, 'houses' | 'spaceship'>,
   blocks: readonly HabitatBlock[],
   base: number,
   theme: Theme,
@@ -103,8 +100,7 @@ export function buildHabitats(
   blocks.forEach((b, i) => {
     const n = 1000 + b.col * 37 + b.row * 11 + i;
     if (style === 'seabase') seabaseBlock(ctx, b, n);
-    else if (style === 'moonbase') moonbaseBlock(ctx, b, n);
-    else starshipBlock(ctx, b, n);
+    else moonbaseBlock(ctx, b, n);
   });
   parts.build(g);
   grove.build(g);
@@ -315,87 +311,5 @@ function moonbaseBlock(ctx: Ctx, b: HabitatBlock, n: number) {
     parts.add('post', 'cyl', M.metal, trs(x, base + h / 2, z, 0.3, h, 0.3), trim);
     parts.add('dish', 'hemi', M.shell, trs(x, base + h, z, 2.6, 0.9, 2.6, hash(n) * 6, 2.3), 0xf8f9fa);
     parts.add('glow', 'sphere', M.glow, trs(x, base + h + 0.6, z, 0.3, 0.3, 0.3), 0xff3b30, false);
-  }
-}
-
-// --- the starship's deck ------------------------------------------------------------------
-
-function starshipBlock(ctx: Ctx, b: HabitatBlock, n: number) {
-  const { parts, base, theme } = ctx;
-  const cx = (b.x0 + b.x1) / 2;
-  const cz = (b.z0 + b.z1) / 2;
-  const w = b.x1 - b.x0;
-  const d = b.z1 - b.z0;
-  const strip = pick(theme.town.roofs, hash(n * 1.9));
-  const hull = (k: number) => pick(theme.town.walls, hash(n * k));
-  const seam = 0x3a4250;
-
-  // Stepped superstructure: a broad base, a narrower deck above it, and in
-  // the middle of the ship a tower on top of that.
-  const tiers: { w: number; d: number; h: number; x: number; z: number }[] = [];
-  const h0 = 5 + hash(n * 2.3) * 4;
-  tiers.push({ w: w - 4, d: d - 4, h: h0, x: cx, z: cz });
-  const h1 = b.zone === 'village' ? 4 + hash(n * 3.1) * 4 : 7 + hash(n * 3.1) * 9;
-  const t1w = w * (0.45 + hash(n * 4.3) * 0.25);
-  tiers.push({ w: t1w, d: d * 0.62, h: h1, x: cx + (hash(n * 5.1) - 0.5) * (w - t1w - 6), z: cz });
-  if (b.zone === 'city' || (b.zone === 'town' && hash(n * 6.7) < 0.5)) {
-    const h2 = b.zone === 'city' ? 14 + hash(n * 7.3) * 26 : 8 + hash(n * 7.3) * 10;
-    const t = tiers[1];
-    tiers.push({ w: t.w * 0.5, d: t.d * 0.6, h: h2, x: t.x + (hash(n * 8.9) - 0.5) * t.w * 0.3, z: cz });
-  }
-
-  let y = base;
-  tiers.forEach((t, i) => {
-    parts.add('hull', 'box', M.shell, trs(t.x, y + t.h / 2, t.z, t.w, t.h, t.d), hull(9 + i));
-    // A light strip round the top edge, front and back.
-    for (const f of [-1, 1]) {
-      parts.add('glow', 'box', M.glow, trs(t.x, y + t.h - 0.5, t.z + f * (t.d / 2 + 0.05), t.w - 1, 0.35, 0.12), strip, false);
-    }
-    // Window rows on both long faces.
-    for (const f of [-1, 1]) {
-      const cols = Math.max(1, Math.floor((t.w - 2) / 2.6));
-      for (let fy = y + 2.4; fy < y + t.h - 1.6; fy += 3.2) {
-        for (let c = 0; c < cols; c++) {
-          const wx = t.x - t.w / 2 + 1 + (c + 0.5) * ((t.w - 2) / cols);
-          pane(ctx, trs(wx, fy, t.z + f * (t.d / 2 + 0.06), 1.5, 0.7, 0.14), hash(n * 13 + i * 97 + c * 7 + fy));
-        }
-      }
-    }
-    // Panel seams down the faces.
-    for (let x = t.x - t.w / 2 + 6; x < t.x + t.w / 2 - 3; x += 6) {
-      parts.add('seam', 'box', M.metal, trs(x, y + t.h / 2, t.z - t.d / 2 - 0.05, 0.25, t.h, 0.1), seam, false);
-    }
-    y += t.h;
-  });
-
-  // Up top: radiator fins, an antenna and, on some, a turret.
-  const top = tiers[tiers.length - 1];
-  const roofY = y;
-  if (hash(n * 15.1) < 0.5 && top.w > 10) {
-    for (let k = 0; k < 4; k++) {
-      parts.add('fin', 'box', M.metal, trs(top.x - top.w * 0.3 + k * 1.6, roofY + 2, top.z, 0.25, 4, top.d * 0.6), 0x9aa5b4);
-    }
-  }
-  const ax = top.x + top.w * 0.3;
-  const ah = 6 + hash(n * 16.3) * 10;
-  parts.add('mast', 'cyl', M.metal, trs(ax, roofY + ah / 2, top.z, 0.2, ah, 0.2), 0xadb5bd);
-  parts.add('glow', 'sphere', M.glow, trs(ax, roofY + ah, top.z, 0.35, 0.35, 0.35), hash(n) < 0.5 ? 0xff3b30 : 0x22e4ff, false);
-  // Turrets sit on the broad base deck, beside the upper tier.
-  if (hash(n * 17.9) < 0.55) {
-    const t1 = tiers[1];
-    const space = (tiers[0].w - t1.w) / 2;
-    if (space > 8) {
-      const left = t1.x - tiers[0].x > 0;
-      const tx = left ? tiers[0].x - tiers[0].w / 2 + space / 2 + 1 : tiers[0].x + tiers[0].w / 2 - space / 2 - 1;
-      const ty = base + h0;
-      parts.add('turret', 'cyl', M.metal, trs(tx, ty + 0.6, cz, 3, 1.2, 3), 0x6c7a89);
-      parts.add('turret', 'hemi', M.metal, trs(tx, ty + 1.2, cz, 2.4, 1.8, 2.4), 0x8592a3);
-      const aim = hash(n * 19.3) * Math.PI * 2;
-      for (const s of [-0.6, 0.6]) {
-        const ox = Math.cos(aim + Math.PI / 2) * s;
-        const oz = -Math.sin(aim + Math.PI / 2) * s;
-        parts.add('barrel', 'box', M.metal, trs(tx + ox + Math.cos(aim) * 3, ty + 2, cz + oz - Math.sin(aim) * 3, 5, 0.35, 0.35, aim), 0x495057);
-      }
-    }
   }
 }

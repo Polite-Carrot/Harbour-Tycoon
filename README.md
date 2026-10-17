@@ -63,12 +63,16 @@ On the web the port is a full 3D scene (three.js) you can explore:
   between them and over the avenues; **Tranquility Base**, a moon base of
   half-sunk habitat modules, white domes, solar farms, dish masts and
   landing pads, with space freighters hovering over a cratered landing field
-  and Earth in the black sky; and **Orbital One**, the deck of a huge
-  starship (stepped superstructure with light strips, radiator fins and
-  turrets, a hull stepping down below, a long bow, a bank of glowing engines
-  and the bridge behind town), where freighters dock in the void below a
-  ringed planet, nudged in by thruster drones. These three build their towns
-  in `habitat.ts`. Every vessel keeps the container ship's cargo layout, so the
+  and Earth in the black sky; and **Orbital One**, a spaceport on the
+  flank of a huge starship, with no town at all (`spaceship.ts`): the dock is
+  a docking platform along her side, and behind it her lofted, plated hull
+  rises, banded with windows and cyan light strips, with glowing hangar bays
+  and shuttles flying in and out. The command bridge, a dorsal fin, sensor
+  domes, turrets and a turning radar are on her back, with a bank of glowing
+  engines at the stern, nacelles on pylons, a needle nose, boarding tubes
+  from the shed roofs and blinking running lights. Freighters dock in the
+  void below a ringed planet, nudged in by thruster drones. Coral Deep and
+  Tranquility Base build their towns in `habitat.ts`. Every vessel keeps the container ship's cargo layout, so the
   cranes work them all the same way.
 - **Sea life.** A dolphin pod porpoises through the harbour, humpback whales
   blow, dive tail-up and breach out at sea, sharks patrol with their fins out,

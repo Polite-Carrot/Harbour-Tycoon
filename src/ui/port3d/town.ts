@@ -572,7 +572,7 @@ export class Town {
 
   private buildBlocks() {
     const kind = this.theme.town.style ?? 'houses';
-    if (kind !== 'houses') {
+    if (kind === 'seabase' || kind === 'moonbase') {
       this.buildHabitatBlocks(kind);
       return;
     }
@@ -713,8 +713,8 @@ export class Town {
     grove.build(g);
   }
 
-  /** The fun ports: a seabed base, a moon base or a starship's deck (habitat.ts). */
-  private buildHabitatBlocks(kind: Exclude<NonNullable<Theme['town']['style']>, 'houses'>) {
+  /** The fun ports: a seabed base or a moon base (habitat.ts). */
+  private buildHabitatBlocks(kind: Exclude<NonNullable<Theme['town']['style']>, 'houses' | 'spaceship'>) {
     const blocks: HabitatBlock[] = [];
     const yards: Instance[] = [];
     const isCivic = (col: number, row: number) => col === 5 && row <= 1; // square, town hall

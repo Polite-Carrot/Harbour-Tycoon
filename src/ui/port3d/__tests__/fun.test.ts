@@ -84,3 +84,35 @@ describe('fun worlds', () => {
     world.dispose();
   });
 });
+
+describe('Orbital One', () => {
+  it('has no town: the starship stands where it would be', async () => {
+    const THREE = await import('three');
+    const { PortLand } = await import('../port');
+    const { THEMES } = await import('../theme');
+    const space = THEMES.find((t) => t.id === 'space')!;
+    expect(space.town.style).toBe('spaceship');
+    const land = new PortLand(space, new THREE.MeshStandardMaterial());
+    // No town (houses, people, cars, the square): a starship instead.
+    const town = (land as unknown as { town: unknown }).town;
+    const ship = (land as unknown as { spaceship: { group: THREE.Group } | null }).spaceship;
+    expect(town).toBeNull();
+    expect(ship).not.toBeNull();
+    // She is big: longer than the whole dock, rising well above the sheds.
+    const box = new THREE.Box3().setFromObject(ship!.group);
+    expect(box.max.x - box.min.x).toBeGreaterThan(1800);
+    expect(box.max.y).toBeGreaterThan(80);
+    expect(() => (ship as unknown as { update: (t: number) => void }).update(12.3)).not.toThrow();
+  });
+
+  it('never prompts for sea life where there is none', async () => {
+    const { HarbourWorld } = await import('../HarbourWorld');
+    const { THEMES } = await import('../theme');
+    const w = new HarbourWorld();
+    const space = THEMES.find((t) => t.id === 'space')!;
+    (w as unknown as { enter: (t: unknown) => void }).enter(space);
+    const sea = (w as unknown as { sea: { sighting: unknown } }).sea;
+    sea.sighting = { kind: 'dolphins', position: { x: 0, y: 0, z: 0 }, at: 1 };
+    expect(w.takeSighting()).toBeNull();
+  });
+});
