@@ -180,6 +180,10 @@ interface Dolphin {
   phase: number;
   wasAbove: boolean;
   prevY: number;
+  /** Added to its own clock, so `showcase` can time a leap for the camera. */
+  shift: number;
+  /** A leap cycle that must be a big one (the showcased leap). */
+  forceN: number;
 }
 
 interface Whale {
@@ -197,6 +201,10 @@ interface Whale {
   blowAt: number;
   lastBlow: number;
   breachSplashed: boolean;
+  /** Added to its own behaviour clock (not its route), see `showcase`. */
+  shift: number;
+  /** A behaviour cycle that must breach (the showcased one). */
+  forceN: number;
 }
 
 interface Shark {
@@ -253,6 +261,8 @@ export class SeaLife {
   private readonly q = new THREE.Quaternion();
   private readonly s = new THREE.Vector3(1, 1, 1);
   private readonly pv = new THREE.Vector3();
+  /** The whale behind the latest whale sighting, for `showcase`. */
+  private lastWhale: Whale | null = null;
 
   constructor() {
     this.group.add(this.splashes.group);
@@ -273,6 +283,8 @@ export class SeaLife {
         phase: hash(i * 7) * 4,
         wasAbove: false,
         prevY: -2,
+        shift: 0,
+        forceN: Number.NaN,
       });
     });
 
@@ -311,6 +323,8 @@ export class SeaLife {
         blowAt: -99,
         lastBlow: -99,
         breachSplashed: false,
+        shift: 0,
+        forceN: Number.NaN,
       });
     }
 
@@ -353,6 +367,41 @@ export class SeaLife {
     }
   }
 
+  /**
+   * Put on a show for the camera. The prompt fires as something happens, and
+   * by the time the player taps Look and the camera gets there it is over.
+   * So instead, re-time the animal: shift its own clock so its next big
+   * moment (a whale's breach, the pod's big leaps) peaks at scenery time
+   * `peakAt`. Returns where that will be, for the camera to fly to.
+   */
+  showcase(kind: Sighting['kind'], peakAt: number): THREE.Vector3 | null {
+    if (kind === 'whale') {
+      const w = this.lastWhale ?? this.whales[0];
+      // The top of the breach: 45% of the way through the 29-34s leap.
+      const apex = 29 + 5 * 0.45;
+      const local = peakAt + w.phase + w.shift;
+      const n = Math.floor(local / w.cycle);
+      w.shift += n * w.cycle + apex - local;
+      w.forceN = n;
+      w.breachSplashed = false;
+      const r = route(w.cx, w.cz, w.rx, w.rz, peakAt * w.speed + w.phase);
+      return new THREE.Vector3(r.x, 0, r.z);
+    }
+    if (kind === 'dolphins') {
+      // The whole pod, one after another, at the top of a big spinning leap.
+      this.dolphins.forEach((d, i) => {
+        const at = peakAt + i * 0.3;
+        const local = at + d.phase + d.shift;
+        const n = Math.floor(local / d.period);
+        d.shift += n * d.period + 1.55 / 2 - local;
+        d.forceN = n;
+      });
+      const r = route(30, -72, 170, 11, peakAt * 0.045);
+      return new THREE.Vector3(r.x, 0, r.z);
+    }
+    return null;
+  }
+
   update(t: number, dt: number, heightAt: Height) {
     this.updateDolphins(t, dt, heightAt);
     for (const w of this.whales) this.updateWhale(w, t, dt, heightAt);
@@ -381,10 +430,10 @@ export class SeaLife {
 
       // Each dolphin runs its own leap cycle: a low porpoising leap most
       // times, a big spinning one now and then.
-      const local = t + d.phase;
+      const local = t + d.phase + d.shift;
       const n = Math.floor(local / d.period);
       const tau = local - n * d.period;
-      const big = hash(n * 13.7 + d.period) > 0.78;
+      const big = n === d.forceN || hash(n * 13.7 + d.period) > 0.78;
       const leapDur = big ? 1.55 : 1.15;
       const height = big ? 6.5 : 2.6;
       let y: number;
@@ -418,10 +467,10 @@ export class SeaLife {
 
   private updateWhale(w: Whale, t: number, dt: number, heightAt: Height) {
     const L = WHALE_L;
-    const local = t + w.phase;
+    const local = t + w.phase + w.shift;
     const n = Math.floor(local / w.cycle);
     const c = local - n * w.cycle;
-    const breaches = hash(n * 3.3 + w.cx) > 0.35;
+    const breaches = n === w.forceN || hash(n * 3.3 + w.cx) > 0.35;
 
     // Slow travel along its loop; slower still while diving.
     const a = t * w.speed + w.phase;
@@ -452,7 +501,10 @@ export class SeaLife {
       pitch = -smoothstep(0, 0.6, s) * 1.35;
       y = surface - 1.75 - smoothstep(0.1, 1, s) * 9.4;
       amp = 0.02;
-      if (s > 0.35 && s < 0.4) this.sighting ??= { kind: 'whale', position: new THREE.Vector3(r.x, surface, r.z), at: t };
+      if (s > 0.35 && s < 0.4) {
+        this.sighting ??= { kind: 'whale', position: new THREE.Vector3(r.x, surface, r.z), at: t };
+        if (this.sighting.kind === 'whale') this.lastWhale = w;
+      }
     } else if (c < 29) {
       y = surface - 14;
       visible = false;
@@ -472,7 +524,10 @@ export class SeaLife {
           roll = 1.2 + k * 0.6;
         }
         if (s < 0.1) w.breachSplashed = false;
-        if (s > 0.08 && s < 0.12) this.sighting = { kind: 'whale', position: new THREE.Vector3(r.x, surface, r.z), at: t };
+        if (s > 0.08 && s < 0.12) {
+          this.sighting = { kind: 'whale', position: new THREE.Vector3(r.x, surface, r.z), at: t };
+          this.lastWhale = w;
+        }
         if (!w.breachSplashed && s > 0.72) {
           w.breachSplashed = true;
           this.splashes.splash(r.x, surface, r.z, 6, 120);

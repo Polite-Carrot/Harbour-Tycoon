@@ -148,7 +148,17 @@ export class RailLink {
 // Dredger
 // ---------------------------------------------------------------------------
 
-const DREDGER_AT = new THREE.Vector3(-360, 0, -64);
+/**
+ * Out to the west, well seaward of the shipping lane: ships come in and go
+ * out along standoffZ (berthing.ts), up to z ~ -42 at the biggest class, and
+ * the barge, hopper and the whole swing of the grab stay between z ~ -74 and
+ * -118, clear of the VIP tall ship's lane and the visiting event vessels'
+ * (harbourEvents.ts EVENT_LANES).
+ * Turned so the hopper and the grab work on the open-sea side.
+ * `dredger.test.ts` holds it there.
+ */
+export const DREDGER_AT = new THREE.Vector3(-330, 0, -96);
+const DREDGER_YAW = Math.PI + 0.35;
 
 /** A grab dredger: a crane barge scooping mud into a hopper alongside. */
 export class Dredger {
@@ -206,7 +216,7 @@ export class Dredger {
     this.boom.add(this.bucket);
 
     g.position.copy(DREDGER_AT);
-    g.rotation.y = 0.35;
+    g.rotation.y = DREDGER_YAW;
   }
 
   update(t: number, level: number, heightAt: Height) {
@@ -357,7 +367,7 @@ export class CruiseTerminal {
 // VIP tall ship
 // ---------------------------------------------------------------------------
 
-const VIP_LANE_Z = -54;
+export const VIP_LANE_Z = -54;
 const VIP_FROM = -440;
 const VIP_TO = 440;
 

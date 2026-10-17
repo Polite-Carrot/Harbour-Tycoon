@@ -26,6 +26,13 @@ import { disposeTree, glow, glowSprite, hash } from './util';
 
 type Height = (x: number, z: number) => number;
 
+/**
+ * Where each visiting vessel sails, as z (out to sea is more negative). Kept
+ * apart from the cargo ships' lane (~-24 to -42), the VIP tall ship (-54) and
+ * the dredger (~-74 to -118, out west); `dredger.test.ts` checks them all.
+ */
+export const EVENT_LANES = { celebrity: -66, golden: -140, pirates: -168 } as const;
+
 /** How hard a storm is blowing at `now`, 0..1 (fading in and out). */
 export function stormLevel(now: number): number {
   const ev = eventWindow(now);
@@ -98,6 +105,30 @@ function gild(root: THREE.Object3D) {
     if (!mesh.isMesh) return;
     mesh.material = Array.isArray(mesh.material) ? mesh.material.map(plate) : plate(mesh.material);
   });
+}
+
+/** The vessel an event brings, in this world (one model each, built once per world). */
+export function buildEventVessel(kind: keyof typeof EVENT_LANES, world: World): THREE.Group {
+  const g = new THREE.Group();
+  if (kind === 'celebrity') {
+    // A dark superyacht at sea, a sleek sub below, a drone-ship above.
+    const m = world === 'sea' ? buildYacht({ hull: 0x111827, jib: 0xffd23f }) : world === 'underwater' ? buildMiniSub() : buildDrone();
+    m.scale.setScalar(world === 'sea' ? 4.2 : world === 'underwater' ? 2.6 : 3.2);
+    g.add(m);
+  } else if (kind === 'golden') {
+    // A liner at sea, the cargo vessel of the world elsewhere, gold-plated.
+    const m = world === 'sea' ? buildLiner() : world === 'underwater' ? buildSubmarine() : buildFreighter();
+    m.scale.setScalar(world === 'sea' ? 1.5 : 1.2);
+    gild(m);
+    g.add(m);
+  } else {
+    // A black-sailed galleon, a dark sub, or a raider freighter.
+    const m = world === 'sea' ? buildGalleon() : world === 'underwater' ? buildSubmarine() : buildFreighter();
+    m.scale.setScalar(world === 'sea' ? 1.4 : 1.1);
+    blacken(m, world === 'sea');
+    g.add(m);
+  }
+  return g;
 }
 
 export class HarbourEvents {
@@ -226,44 +257,14 @@ export class HarbourEvents {
     this.vessels = new THREE.Group();
     this.group.add(this.vessels);
 
-    // The celebrity: a dark superyacht at sea, a sleek sub below, a drone-ship above.
-    const celeb = new THREE.Group();
-    if (world === 'sea') {
-      const y = buildYacht({ hull: 0x111827, jib: 0xffd23f });
-      y.scale.setScalar(4.2);
-      celeb.add(y);
-    } else if (world === 'underwater') {
-      const s = buildMiniSub();
-      s.scale.setScalar(2.6);
-      celeb.add(s);
-    } else {
-      const d = buildDrone();
-      d.scale.setScalar(3.2);
-      celeb.add(d);
-    }
-    celeb.visible = false;
-    this.vessels.add(celeb);
-    this.celebrity = celeb;
-
-    // The golden ship: a liner at sea, the cargo vessel of the world elsewhere.
-    const gold = new THREE.Group();
-    const model = world === 'sea' ? buildLiner() : world === 'underwater' ? buildSubmarine() : buildFreighter();
-    model.scale.setScalar(world === 'sea' ? 1.5 : 1.2);
-    gild(model);
-    gold.add(model);
-    gold.visible = false;
-    this.vessels.add(gold);
-    this.golden = gold;
-
-    // The pirates: a black-sailed galleon, a dark sub, or a raider freighter.
-    const raider = new THREE.Group();
-    const ship = world === 'sea' ? buildGalleon() : world === 'underwater' ? buildSubmarine() : buildFreighter();
-    ship.scale.setScalar(world === 'sea' ? 1.4 : 1.1);
-    blacken(ship, world === 'sea');
-    raider.add(ship);
-    raider.visible = false;
-    this.vessels.add(raider);
-    this.pirate = raider;
+    const add = (o: THREE.Object3D) => {
+      o.visible = false;
+      this.vessels.add(o);
+      return o;
+    };
+    this.celebrity = add(buildEventVessel('celebrity', world));
+    this.golden = add(buildEventVessel('golden', world));
+    this.pirate = add(buildEventVessel('pirates', world));
   }
 
   update(t: number, now: number, world: World, lastEventSlot: number | undefined, heightAt: Height) {
@@ -374,7 +375,7 @@ export class HarbourEvents {
     if (!show || !v) return;
     // In from the east, a slow cruise across the harbour, out to the west.
     const x = 420 - p * 840;
-    const z = -78;
+    const z = EVENT_LANES.celebrity;
     const y = world === 'sea' ? heightAt(x, z) * 0.6 : world === 'underwater' ? -4 : 22 + Math.sin(t) * 1.2;
     v.position.set(x, y, z);
     v.rotation.set(Math.sin(t * 0.8) * 0.02, Math.PI, Math.sin(t * 0.6) * 0.015);
@@ -396,7 +397,7 @@ export class HarbourEvents {
     this.sparkles.forEach((s) => (s.visible = false));
     if (!show || !v) return;
     const x = -460 + p * 920;
-    const z = -118;
+    const z = EVENT_LANES.golden;
     const y = world === 'sea' ? heightAt(x, z) * 0.6 : world === 'underwater' ? -2 : 10 + Math.sin(t * 0.7) * 1;
     v.position.set(x, y, z);
     v.rotation.set(Math.sin(t * 0.7) * 0.015, 0, Math.sin(t * 0.5) * 0.01);
@@ -460,7 +461,7 @@ export class HarbourEvents {
     if (!show || !v) return;
     // In from the west outside the breakwater, broadside to the harbour.
     const x = -480 + p * 600;
-    const z = -150;
+    const z = EVENT_LANES.pirates;
     const sea = world === 'sea';
     const y = sea ? heightAt(x, z) * 0.6 : world === 'underwater' ? -6 : 16 + Math.sin(t * 0.8);
     v.position.set(x, y, z);

@@ -74,6 +74,10 @@ On the web the port is a full 3D scene (three.js) you can explore:
   blow, dive tail-up and breach out at sea, sharks patrol with their fins out,
   and schools of fish mill under the surface (now and then one jumps). A
   prompt pops up when a whale breaches; tap **Look** to fly the camera there.
+  The moment that set off the prompt is over by the time the camera lands,
+  so Look asks for an encore (`SeaLife.showcase`): the whale's next breach,
+  or a run of big dolphin leaps, is re-timed to peak just after the camera
+  arrives.
 
 **Ship handling.** Ships come in parallel to the quay and stop off the berth;
 tugs (always one, a pair from Tugboats level 4) meet them, push them
