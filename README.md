@@ -81,6 +81,14 @@ On the web the port is a full 3D scene (three.js) you can explore:
   void below a ringed planet, nudged in by thruster drones. Coral Deep and
   Tranquility Base build their towns in `habitat.ts`. Every vessel keeps the container ship's cargo layout, so the
   cranes work them all the same way.
+- **Aliens, where there is no sea** (`alienlife.ts`). On the moon and in
+  orbit, flying saucers streak in, hover with their rim lights turning and a
+  tractor beam on, and shoot off again. In orbit, huge glowing space whales
+  swim through the void trailing stardust and arc up in slow "breaches",
+  among drifting star jellies. On the moon, little green aliens pop out of
+  the craters on the landing field, look about, wave and duck back down.
+  Each raises its own prompt (🛸 UFO spotted!, 🐋 Space whale!, 👽 Aliens
+  spotted!), and **Look** re-times it to peak as the camera arrives.
 - **Sea life.** A dolphin pod porpoises through the harbour, humpback whales
   blow, dive tail-up and breach out at sea, sharks patrol with their fins out,
   and schools of fish mill under the surface (now and then one jumps). A

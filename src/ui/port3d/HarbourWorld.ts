@@ -12,6 +12,7 @@ import { PortLand } from './port';
 import { berthZ as berthZOf, shipsAt, tugCount, tugsAt } from './berthing';
 import { BOX_HEIGHT, DECK_Y, HULL_BEAM, HULL_LENGTH, ShipModel, buildTug, slotCentre } from './ship';
 import { SeaLife, type Sighting } from './sealife';
+import { AlienLife } from './alienlife';
 import { SkyLayer } from './sky';
 import { cargoOf, shipOf, themeFor, tugOf, worldOf, type Theme } from './theme';
 import { WORLDS, worldSky } from './worlds';
@@ -76,6 +77,8 @@ export class HarbourWorld {
   private readonly rail = new RailLink();
   private readonly dredger = new Dredger();
   private readonly terminal: CruiseTerminal;
+  /** UFOs, space whales and little green aliens, where there is no sea (alienlife.ts). */
+  private readonly aliens = new AlienLife();
   private readonly tallShip = new TallShip();
   private readonly events = new HarbourEvents();
   private lastSighting = -99;
@@ -90,7 +93,7 @@ export class HarbourWorld {
   constructor() {
     const s = this.scene;
     s.fog = this.fog;
-    s.add(this.skyLayer.group, this.water.group, this.land.group, this.craneGroup, this.sea.group);
+    s.add(this.skyLayer.group, this.water.group, this.land.group, this.craneGroup, this.sea.group, this.aliens.group);
     this.terminal = new CruiseTerminal(this.windowMat);
     s.add(this.rail.group, this.dredger.group, this.terminal.group, this.tallShip.group, this.events.group);
     this.dredger.onSplash = (x, y, z, power) => this.sea.splash(x, y, z, power);
@@ -138,6 +141,9 @@ export class HarbourWorld {
     this.water.setTint(theme.water);
     this.water.group.visible = look.sea;
     this.sea.group.visible = look.seaLife;
+    const world = worldOf(theme);
+    this.aliens.group.visible = world === 'moon' || world === 'space';
+    if (world === 'moon' || world === 'space') this.aliens.setWorld(world);
     this.skyLayer.setClouds(look.clouds);
     this.fog.near = look.fog[0];
     this.fog.far = look.fog[1];
@@ -239,6 +245,7 @@ export class HarbourWorld {
 
     // --- sea life ----------------------------------------------------------------
     this.sea.update(t, Math.min(dt, 0.1), heightAt);
+    if (this.aliens.group.visible) this.aliens.update(t, Math.min(dt, 0.1));
 
     // --- the late upgrades, and the VIP visitor ------------------------------------
     this.rail.update(t, up.railLink, sky.lamps);
@@ -341,19 +348,22 @@ export class HarbourWorld {
    * from now (sealife.ts), and say where, so the camera can be there for it.
    */
   showcase(kind: Sighting['kind'], leadSeconds: number): THREE.Vector3 | null {
-    return this.sea.showcase(kind, this.t + leadSeconds);
+    const at = this.t + leadSeconds;
+    return this.aliens.group.visible ? this.aliens.showcase(kind, at) : this.sea.showcase(kind, at);
   }
 
   takeSighting(): Sighting | null {
-    // No sea life on the moon or in orbit, so nothing to spot there.
-    if (!WORLDS[worldOf(this.land.theme)].seaLife) {
-      this.sea.sighting = null;
-      return null;
-    }
-    const s = this.sea.sighting;
+    // Sea life where there is a sea or a seabed; aliens on the moon and in
+    // orbit. Whatever is not on show here cannot raise a prompt.
+    const fromSea = WORLDS[worldOf(this.land.theme)].seaLife;
+    const source = fromSea ? this.sea : this.aliens.group.visible ? this.aliens : null;
+    const other = fromSea ? this.aliens : this.sea;
+    other.sighting = null;
+    if (!source) return null;
+    const s = source.sighting;
     if (!s || s.at === this.lastSighting) return null;
     this.lastSighting = s.at;
-    this.sea.sighting = null;
+    source.sighting = null;
     return s;
   }
 
