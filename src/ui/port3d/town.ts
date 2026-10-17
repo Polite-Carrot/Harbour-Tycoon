@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GROUND_Y } from './crane';
 import { COLOURS } from './palette';
 import { trees, type Trees } from './flora';
-import type { Theme } from './theme';
+import { worldOf, type Theme } from './theme';
 import { buildCentrepiece, type CentrepieceModel } from './square';
 import { buildHabitats, type HabitatBlock } from './habitat';
 import { glow, hash, mat } from './util';
@@ -130,8 +130,22 @@ const perimeter = (r: [number, number, number, number]) => 2 * (r[2] - r[0] + r[
  * Low-poly townsfolk: legs and arms swing as they walk, they sit properly on
  * benches and café chairs, and the odd one stops for a chat.
  */
+/**
+ * What the townsfolk wear: everyday clothes, space suits on the moon (white,
+ * gold visors, life-support packs), or diving suits on the seabed (bright
+ * drysuits, brass-rimmed helmets, air tanks).
+ */
+type Outfit = 'clothes' | 'space' | 'dive';
+
+const SPACE_SUITS = [0xf1f3f5, 0xf1f3f5, 0xe9ecef, 0xf1f3f5, 0xff8a1f, 0xdee2e6];
+const SPACE_TRIM = [0x1c7ed6, 0xe03131, 0xff8a1f, 0x495057];
+const DIVE_SUITS = [0xffd43b, 0xff922b, 0xfab005, 0xf76707, 0x15aabf, 0xff6b6b];
+
 class Crowd {
   readonly group = new THREE.Group();
+  /** Helmet visors (suits only), and the packs on their backs. */
+  private visor: THREE.InstancedMesh | null = null;
+  private pack: THREE.InstancedMesh | null = null;
   private readonly people: Person[] = [];
   private readonly torso: THREE.InstancedMesh;
   private readonly head: THREE.InstancedMesh;
@@ -144,12 +158,18 @@ class Crowd {
   private readonly part = new THREE.Matrix4();
   private readonly tmp = new THREE.Matrix4();
 
-  constructor(people: Person[]) {
+  constructor(people: Person[], outfit: Outfit = 'clothes') {
     this.people = people;
     const n = people.length;
     const plain = () => new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.75 });
-    this.torso = new THREE.InstancedMesh(new THREE.BoxGeometry(0.32, 0.72, 0.52), plain(), n);
-    this.head = new THREE.InstancedMesh(new THREE.SphereGeometry(0.17, 10, 8), plain(), n);
+    const suited = outfit !== 'clothes';
+    this.torso = new THREE.InstancedMesh(new THREE.BoxGeometry(suited ? 0.38 : 0.32, 0.72, suited ? 0.58 : 0.52), plain(), n);
+    // In a suit the head is a helmet: bigger, and shiny.
+    this.head = new THREE.InstancedMesh(
+      new THREE.SphereGeometry(suited ? 0.25 : 0.17, 14, 10),
+      suited ? new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3, metalness: outfit === 'dive' ? 0.7 : 0.1 }) : plain(),
+      n,
+    );
     this.hair = new THREE.InstancedMesh(new THREE.SphereGeometry(0.18, 10, 6, 0, Math.PI * 2, 0, Math.PI * 0.55), plain(), n);
     this.legs = new THREE.InstancedMesh(new THREE.BoxGeometry(0.2, 0.86, 0.21).translate(0, -0.43, 0), plain(), n * 2);
     this.arms = new THREE.InstancedMesh(new THREE.BoxGeometry(0.14, 0.66, 0.15).translate(0, -0.33, 0), plain(), n * 2);
@@ -169,7 +189,9 @@ class Crowd {
       this.arms.setColorAt(i * 2, c.setHex(sleeve));
       this.arms.setColorAt(i * 2 + 1, c.setHex(sleeve));
     });
-    for (const m of [this.torso, this.head, this.hair, this.legs, this.arms]) {
+    if (suited) this.suitUp(people, outfit, c);
+    for (const m of [this.torso, this.head, this.hair, this.legs, this.arms, this.visor, this.pack]) {
+      if (!m) continue;
       m.castShadow = true;
       m.frustumCulled = false;
       this.group.add(m);
@@ -177,7 +199,7 @@ class Crowd {
 
     // A few dogs out for a walk with their owners.
     people.forEach((p, i) => {
-      if (p.b.kind === 'walk' && this.dogOwners.length < 14 && hash(i * 3.3) > 0.88) this.dogOwners.push(i);
+      if (!suited && p.b.kind === 'walk' && this.dogOwners.length < 14 && hash(i * 3.3) > 0.88) this.dogOwners.push(i);
     });
     const dogGeo = new THREE.BoxGeometry(0.7, 0.32, 0.26);
     dogGeo.translate(0, 0.42, 0);
@@ -262,7 +284,7 @@ class Crowd {
       p.yaw = yaw;
       this.pose(i, p, x, z, yaw, moving, sitting, seat, t);
     }
-    for (const m of [this.torso, this.head, this.hair, this.legs, this.arms]) m.instanceMatrix.needsUpdate = true;
+    for (const m of [this.torso, this.head, this.hair, this.legs, this.arms, this.visor, this.pack]) if (m) m.instanceMatrix.needsUpdate = true;
 
     // Dogs trot at heel, a step to the side and slightly behind.
     this.dogOwners.forEach((owner, k) => {
@@ -276,6 +298,39 @@ class Crowd {
       this.dogs.setMatrixAt(k, this.tmp);
     });
     this.dogs.instanceMatrix.needsUpdate = true;
+  }
+
+  /** Swap clothes for suits: recolour, hide the hair, add visors and packs. */
+  private suitUp(people: Person[], outfit: Outfit, c: THREE.Color) {
+    const n = people.length;
+    const space = outfit === 'space';
+    // A visor across the front of the helmet (people face +x).
+    const visorGeo = new THREE.SphereGeometry(0.262, 14, 8, Math.PI - 0.95, 1.9, Math.PI * 0.3, Math.PI * 0.36);
+    const visorMat = space
+      ? new THREE.MeshStandardMaterial({ color: 0xf2b84b, roughness: 0.12, metalness: 0.9 })
+      : new THREE.MeshStandardMaterial({ color: 0x9fd8ee, roughness: 0.05, metalness: 0.3, transparent: true, opacity: 0.85 });
+    this.visor = new THREE.InstancedMesh(visorGeo, visorMat, n);
+    // Life-support pack, or twin air tanks.
+    const packGeo = space ? new THREE.BoxGeometry(0.2, 0.52, 0.46) : new THREE.CylinderGeometry(0.1, 0.1, 0.56, 10);
+    this.pack = new THREE.InstancedMesh(packGeo, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5, metalness: space ? 0.1 : 0.6 }), space ? n : n * 2);
+    people.forEach((_, i) => {
+      const seed = i * 7.31;
+      const suit = (space ? SPACE_SUITS : DIVE_SUITS)[Math.floor(hash(seed) * (space ? SPACE_SUITS : DIVE_SUITS).length)];
+      const trim = space ? SPACE_TRIM[Math.floor(hash(seed + 9) * SPACE_TRIM.length)] : 0x343a40;
+      this.torso.setColorAt(i, c.setHex(suit));
+      // Helmets: white on the moon; a brass dome on the seabed.
+      this.head.setColorAt(i, c.setHex(space ? 0xf8f9fa : 0xc9a227));
+      for (const k of [0, 1]) {
+        this.legs.setColorAt(i * 2 + k, c.setHex(suit));
+        // Gloves and boots in the trim colour show at the cuffs: a mission patch of sorts.
+        this.arms.setColorAt(i * 2 + k, c.setHex(hash(seed + 11 + k) > 0.7 ? trim : suit));
+      }
+      this.visor!.setColorAt(i, c.setHex(0xffffff));
+      if (space) this.pack!.setColorAt(i, c.setHex(hash(seed + 13) > 0.6 ? 0xdee2e6 : 0xadb5bd));
+      else for (const k of [0, 1]) this.pack!.setColorAt(i * 2 + k, c.setHex(0xadb5bd));
+    });
+    // No hair under a helmet.
+    this.hair.visible = false;
   }
 
   private pose(i: number, p: Person, x: number, z: number, yaw: number, moving: boolean, sitting: boolean, seat: number, t: number) {
@@ -299,6 +354,11 @@ class Crowd {
     const armSwing = sitting ? 0.6 : -stride * 0.5;
     set(this.arms, i * 2, 0, hip + 0.68, 0.33, armSwing);
     set(this.arms, i * 2 + 1, 0, hip + 0.68, -0.33, sitting ? 0.6 : -armSwing);
+    if (this.visor) set(this.visor, i, sitting ? -0.03 : 0, hip + 0.9, 0, 0);
+    if (this.pack) {
+      if (this.pack.count === this.people.length) set(this.pack, i, -0.3, hip + 0.42, 0, sitting ? -0.08 : 0);
+      else for (const k of [0, 1]) set(this.pack, i * 2 + k, -0.3, hip + 0.42, k ? 0.12 : -0.12, sitting ? -0.08 : 0);
+    }
   }
 }
 
@@ -493,7 +553,8 @@ export class Town {
     this.fountain.visible = this.centrepiece.spray;
     this.group.add(this.fountain);
 
-    this.crowd = new Crowd(this.makePeople());
+    const world = worldOf(theme);
+    this.crowd = new Crowd(this.makePeople(), world === 'moon' || world === 'space' ? 'space' : world === 'underwater' ? 'dive' : 'clothes');
     this.group.add(this.crowd.group);
     this.traffic = new Traffic(this.makeCars());
     this.group.add(this.traffic.group);

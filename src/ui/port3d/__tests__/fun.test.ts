@@ -144,3 +144,25 @@ describe('cargo pods aboard the starship', () => {
     }
   });
 });
+
+describe('townsfolk in suits', () => {
+  it('wear space suits on the moon and diving suits on the seabed, clothes elsewhere', async () => {
+    const THREE = await import('three');
+    const { Town } = await import('../town');
+    const { THEMES } = await import('../theme');
+    const crowdOf = (id: string) => {
+      const town = new Town(new THREE.MeshStandardMaterial(), THEMES.find((t) => t.id === id)!);
+      return (town as unknown as { crowd: { visor: unknown; pack: { count: number } | null; hair: { visible: boolean }; dogs: { count: number } } }).crowd;
+    };
+    for (const id of ['moon', 'underwater']) {
+      const c = crowdOf(id);
+      expect(c.visor, id).not.toBeNull();
+      expect(c.pack, id).not.toBeNull();
+      expect(c.hair.visible, id).toBe(false);
+      expect(c.dogs.count, id).toBe(0); // the dogs stay home
+    }
+    const home = crowdOf('temperate');
+    expect(home.visor).toBeNull();
+    expect(home.hair.visible).toBe(true);
+  });
+});

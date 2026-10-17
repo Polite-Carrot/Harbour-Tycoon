@@ -39,6 +39,9 @@ On the web the port is a full 3D scene (three.js) you can explore:
   clock tower keeps harbour time. A few hundred people walk the pavements,
   stroll the square, chat, shop and sit at the café, some with dogs, while
   cars circle the blocks and buses run the ring road (lights on at night).
+  On the moon the townsfolk wear white space suits with gold visors and
+  life-support packs; on the seabed, bright diving suits with brass-rimmed
+  helmets and twin air tanks (the dogs stay home).
 - **Every port is somewhere different.** The quay, cranes and yard work the
   same everywhere, but each port has its own setting (`src/ui/port3d/theme.ts`):
   Old Harbour is a green seaside town, Saltmere Quay a desert port with
