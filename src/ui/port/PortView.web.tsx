@@ -6,6 +6,7 @@ import { formatMoney } from '../../sim/format';
 import { HOME_OFFSET, HOME_TARGET, HarbourWorld } from '../port3d/HarbourWorld';
 import { PortScene } from './PortScene';
 import type { PortViewProps } from './PortView';
+import type { Sighting } from '../port3d/sealife';
 
 /** How far the camera may wander from the berth, in world units. */
 const BOUNDS = { minX: -420, maxX: 420, minZ: -380, maxZ: 220 };
@@ -19,6 +20,8 @@ const SIGHTING_TEXT = {
   shark: '🦈 Shark fin!',
 } as const;
 const RECENTER_SECONDS = 0.9;
+/** After a Look flight lands, how long until the whale or dolphins peak. */
+const SHOWCASE_BEAT = 1.6;
 /** Length of the Time Warp time-lapse, and what it sweeps through. */
 const WARP_MS = 3500;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -122,9 +125,14 @@ export function PortView(props: PortViewProps) {
     };
     recenterRef.current = () => flyTo(HOME_TARGET.clone(), homeFor(camera.aspect));
     let lastSeen: THREE.Vector3 | null = null;
+    let lastKind: Sighting['kind'] | null = null;
     lookAtRef.current = () => {
-      if (!lastSeen) return;
-      const target = new THREE.Vector3(lastSeen.x, HOME_TARGET.y, lastSeen.z);
+      if (!lastSeen || !lastKind) return;
+      // The moment the prompt fired has passed by now, so ask the sea life
+      // for an encore: its next big moment, timed to peak just after the
+      // camera arrives (the flight, then a beat to see it rise).
+      const at = world.showcase(lastKind, RECENTER_SECONDS + SHOWCASE_BEAT) ?? lastSeen;
+      const target = new THREE.Vector3(at.x, HOME_TARGET.y, at.z);
       // Look out to sea from the harbour side, close enough to see the splash.
       const from = new THREE.Vector3(target.x * 0.6, 0, target.z + 70).sub(target).setY(0).normalize();
       flyTo(target, target.clone().addScaledVector(from, 60).setY(32));
@@ -186,6 +194,7 @@ export function PortView(props: PortViewProps) {
       if (seen && wall - (lastShown[seen.kind] ?? -1e9) > SIGHTING_COOLDOWN_MS[seen.kind]) {
         lastShown[seen.kind] = wall;
         lastSeen = seen.position.clone();
+        lastKind = seen.kind;
         setSighting({ kind: seen.kind, id: ++sightingId });
       }
       renderer.render(world.scene, camera);

@@ -336,6 +336,14 @@ export class HarbourWorld {
   }
 
   /** A new whale breach or dolphin leap since the last call, if any. */
+  /**
+   * Time the sea life's next big moment of this kind to peak `leadSeconds`
+   * from now (sealife.ts), and say where, so the camera can be there for it.
+   */
+  showcase(kind: Sighting['kind'], leadSeconds: number): THREE.Vector3 | null {
+    return this.sea.showcase(kind, this.t + leadSeconds);
+  }
+
   takeSighting(): Sighting | null {
     const s = this.sea.sighting;
     if (!s || s.at === this.lastSighting) return null;
