@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { PILE_ROWS, PILE_TIERS, pileZ, type CraneWork, type Spot } from './cargo';
-import { containerGeometry, containerMaterial } from './containers';
+import { containerGeometry, containerMaterial, setCargoColour } from './containers';
 import { CRANE, buildCrane } from './models/quay';
 import { BOX_HEIGHT } from './ship';
 import { glowSprite, lerp } from './util';
@@ -91,7 +91,7 @@ export class Crane {
 
     this.carried.visible = work.carrying !== null;
     if (work.carrying !== null) {
-      (this.carried.material as THREE.MeshStandardMaterial).color.setHex(work.carrying);
+      setCargoColour(this.carried.material as THREE.Material, work.carrying);
       this.carried.scale.setScalar(scale);
       this.carried.position.y = -CRANE.spreaderUnder - (BOX_HEIGHT * scale) / 2;
     }

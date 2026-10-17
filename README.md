@@ -70,7 +70,11 @@ On the web the port is a full 3D scene (three.js) you can explore:
   and shuttles flying in and out. The command bridge, a dorsal fin, sensor
   domes, turrets and a turning radar are on her back, with a bank of glowing
   engines at the stern, nacelles on pylons, a needle nose, boarding tubes
-  from the shed roofs and blinking running lights. Freighters dock in the
+  from the shed roofs and blinking running lights. The dock is built to
+  match: hull plating for the quay and yard, the sheds become vaulted cargo
+  hangar modules with lit bay doors, the customs house a domed control
+  module, and the containers cargo pods (white-grey plating, coloured bands)
+  that stack and ride the cranes exactly like containers. Freighters dock in the
   void below a ringed planet, nudged in by thruster drones. Coral Deep and
   Tranquility Base build their towns in `habitat.ts`. Every vessel keeps the container ship's cargo layout, so the
   cranes work them all the same way.

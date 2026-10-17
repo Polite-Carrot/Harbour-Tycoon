@@ -116,3 +116,31 @@ describe('Orbital One', () => {
     expect(w.takeSighting()).toBeNull();
   });
 });
+
+describe('cargo pods aboard the starship', () => {
+  it('are exactly container-sized, so they stack and ride the cranes the same', async () => {
+    const THREE = await import('three');
+    const { CONTAINER, containerGeometry, containerMaterial, setCargoColour, setCargoStyle } = await import('../containers');
+    setCargoStyle('pod');
+    try {
+      const g = containerGeometry();
+      g.computeBoundingBox();
+      const size = g.boundingBox!.getSize(new THREE.Vector3());
+      expect(size.x).toBeCloseTo(CONTAINER.length, 2);
+      expect(size.y).toBeCloseTo(CONTAINER.height, 2);
+      expect(size.z).toBeCloseTo(CONTAINER.width, 2);
+      // Only the bands and panels take the cargo colour.
+      const accent = g.getAttribute('accent');
+      const marked = Array.from(accent.array as Float32Array).filter((a) => a === 1).length;
+      expect(marked).toBeGreaterThan(0);
+      expect(marked).toBeLessThan(accent.count / 2);
+      // Repainting a carried pod changes its bands, not its plating.
+      const m = containerMaterial();
+      setCargoColour(m, 0xff0000);
+      expect(m.color.getHex()).toBe(0xffffff);
+      expect((m.userData.podTint as InstanceType<typeof THREE.Color>).getHex()).toBe(0xff0000);
+    } finally {
+      setCargoStyle('container');
+    }
+  });
+});

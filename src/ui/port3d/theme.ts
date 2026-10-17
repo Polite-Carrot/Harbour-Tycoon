@@ -22,7 +22,8 @@ export type Backdrop =
 export type World = 'sea' | 'space' | 'moon' | 'underwater';
 export type ShipKind = 'container' | 'galleon' | 'freighter' | 'submarine';
 export type TugKind = 'tug' | 'drone' | 'minisub';
-export type CargoKind = 'container' | 'chest';
+/** Containers, treasure chests in the pirate cove, cargo pods aboard the starship. */
+export type CargoKind = 'container' | 'chest' | 'pod';
 /** What stands in the middle of the town square. */
 export type Centrepiece =
   | 'fountain' | 'oasis' | 'sculpture' | 'yuletree' | 'gazebo' | 'mosaic' | 'torii' | 'windmill' | 'baobab' | 'spire'
@@ -436,6 +437,7 @@ const SPACE: Theme = {
   world: 'space',
   ship: 'freighter',
   tug: 'drone',
+  cargo: 'pod',
   ground: { grass: 0x5c6675, grassDark: 0x4a5361, sand: 0x6e7887, yard: 0x56606e },
   hills: [0x4a5361, 0x5c6675],
   backdrop: 'planet',
