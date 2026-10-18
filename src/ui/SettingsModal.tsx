@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { formatCount, formatDuration, formatMoney, formatNumber } from '../sim/format';
 import type { GameStats } from '../sim/stats';
@@ -13,7 +13,8 @@ interface Props {
 
 /**
  * Settings panel: lifetime stats, resume, and a reset guarded by an explicit
- * confirmation step.
+ * confirmation step, where the reset button itself has to be held down for
+ * {@link HOLD_SECONDS} seconds.
  *
  * The confirmation swaps the panel's contents rather than stacking a second
  * Modal — nested modals are unreliable on react-native-web, and this keeps the
@@ -53,15 +54,12 @@ export function SettingsModal({ visible, stats, onResume, onReset }: Props) {
 
               <Text style={styles.irreversible}>This cannot be undone.</Text>
 
-              <Pressable
-                style={({ pressed }) => [styles.danger, pressed && styles.dangerPressed]}
-                onPress={() => {
+              <HoldToConfirm
+                onConfirm={() => {
                   setConfirming(false);
                   onReset();
                 }}
-              >
-                <Text style={styles.dangerText}>Yes, reset everything</Text>
-              </Pressable>
+              />
 
               {/* Cancel is given equal visual weight to the destructive
                   action, so the safe choice is never the harder target. */}
@@ -131,6 +129,83 @@ function Loss({ label, value }: { label: string; value: string }) {
       <Text style={styles.rowLabel}>{label}</Text>
       <Text style={styles.lossValue}>{value}</Text>
     </View>
+  );
+}
+
+/** How long the reset button must be held before it fires. */
+const HOLD_SECONDS = 6;
+
+/**
+ * A button that only fires after being held for {@link HOLD_SECONDS}: a bar
+ * fills across it while held and drains away if the finger lifts early, so a
+ * stray tap can never wipe the save.
+ */
+function HoldToConfirm({ onConfirm }: { onConfirm: () => void }) {
+  const [progress, setProgress] = useState(0);
+  const holding = useRef(false);
+  const frame = useRef<number | null>(null);
+  const progressRef = useRef(0);
+
+  const stopFrame = () => {
+    if (frame.current !== null) cancelAnimationFrame(frame.current);
+    frame.current = null;
+  };
+  useEffect(() => stopFrame, []);
+
+  const set = (p: number) => {
+    progressRef.current = p;
+    setProgress(p);
+  };
+
+  /** Fill while held, drain (four times faster) once let go. */
+  const run = () => {
+    stopFrame();
+    let last = Date.now();
+    const step = () => {
+      const now = Date.now();
+      const dt = (now - last) / 1000;
+      last = now;
+      const next = holding.current
+        ? progressRef.current + dt / HOLD_SECONDS
+        : progressRef.current - (dt * 4) / HOLD_SECONDS;
+      if (next >= 1) {
+        holding.current = false;
+        set(0);
+        frame.current = null;
+        onConfirm();
+        return;
+      }
+      if (next <= 0) {
+        set(0);
+        frame.current = null;
+        return;
+      }
+      set(next);
+      frame.current = requestAnimationFrame(step);
+    };
+    frame.current = requestAnimationFrame(step);
+  };
+
+  const left = Math.ceil(HOLD_SECONDS * (1 - progress));
+  return (
+    <Pressable
+      style={styles.danger}
+      onPressIn={() => {
+        holding.current = true;
+        run();
+      }}
+      onPressOut={() => {
+        holding.current = false;
+        run();
+      }}
+      accessibilityRole="button"
+      accessibilityLabel={`Hold for ${HOLD_SECONDS} seconds to reset everything`}
+    >
+      <View style={[styles.dangerFill, { width: `${progress * 100}%` }]} />
+      <Text style={styles.dangerText}>
+        {progress > 0 ? `Keep holding… ${left}s` : `Hold ${HOLD_SECONDS}s to reset`}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -206,11 +281,14 @@ const styles = StyleSheet.create({
   cancelText: { color: theme.text, fontSize: 15, fontWeight: '800' },
 
   danger: {
-    backgroundColor: '#a33a3a',
+    backgroundColor: '#6e2a2a',
     borderRadius: 9,
     paddingVertical: 13,
     alignItems: 'center',
+    overflow: 'hidden',
+    // Long-pressing text on the web would otherwise start a selection.
+    userSelect: 'none',
   },
-  dangerPressed: { opacity: 0.85 },
+  dangerFill: { position: 'absolute', left: 0, top: 0, bottom: 0, backgroundColor: '#d64545' },
   dangerText: { color: '#ffffff', fontSize: 15, fontWeight: '800' },
 });
