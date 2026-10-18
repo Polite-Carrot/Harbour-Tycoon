@@ -667,7 +667,8 @@ export class Town {
 
         for (const facing of [-1, 1] as const) {
           // facing -1: front row, faces the street toward the harbour.
-          if (facing === 1 && row === STREETS_Z.length - 1) continue;
+          // The back row faces the footpath along the edge of town, so
+          // every block is built up on both sides.
           let x = b.x0;
           while (x < b.x1 - 3) {
             n++;

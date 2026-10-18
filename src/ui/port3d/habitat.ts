@@ -244,7 +244,6 @@ function moonbaseBlock(ctx: Ctx, b: HabitatBlock, n: number) {
   const r = 3.4;
   const mods: { x: number; z: number; len: number }[] = [];
   for (const f of [-1, 1] as const) {
-    if (f === 1 && b.row === 3) continue; // the edge of the base
     const len = Math.min(w - 14, 16 + hash(n * 2 + f) * 12);
     const mx = cx + (hash(n * 3 + f) - 0.5) * (w - len - 8);
     const mz = f === -1 ? b.z0 + r + 2 : b.z1 - r - 2;
