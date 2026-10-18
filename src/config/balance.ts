@@ -21,6 +21,23 @@ export type UpgradeId =
   | 'dredging'
   | 'cruise';
 
+export type ManagerId = 'dockBoss' | 'portCaptain' | 'eventsManager' | 'broker';
+
+export interface ManagerConfig {
+  readonly id: ManagerId;
+  /** Their name, job title and emoji portrait. */
+  readonly name: string;
+  readonly title: string;
+  readonly icon: string;
+  readonly blurb: string;
+  /** Hiring costs baseCost; each promotion costGrowth times the last. */
+  readonly baseCost: number;
+  readonly costGrowth: number;
+  readonly maxLevel: number;
+  /** What one level is worth (see `managers.ts` for what it means per manager). */
+  readonly perLevel: number;
+}
+
 export type HarbourEventKind = 'container' | 'storm' | 'celebrity' | 'golden' | 'fireworks' | 'pirates';
 
 export interface UpgradeConfig {
@@ -132,6 +149,12 @@ export interface BalanceConfig {
       readonly boostSeconds: number;
     }>>;
   };
+  /**
+   * Managers: staff hired with money and promoted level by level, each a
+   * company-wide bonus. They are part of the company, so selling it at
+   * Head Office lets them go.
+   */
+  readonly managers: Readonly<Record<ManagerId, ManagerConfig>>;
   /** Reasons to come back every day. */
   readonly daily: {
     /** Login streak: minutes of income paid on streak day 1..7 (cycles). */
@@ -410,6 +433,32 @@ export const BALANCE: BalanceConfig = {
     minEarnings: 1e6,
     starScale: 5,
     incomePerStar: 0.1,
+  },
+
+  managers: {
+    // Hired from about the first hour; the top levels are late-run goals.
+    // Every bonus is a capped multiplier, so none can run away with the
+    // economy (see the stability rule above).
+    dockBoss: {
+      id: 'dockBoss', name: 'Sal', title: 'Dock Boss', icon: '👷',
+      blurb: 'Keeps every crew working flat out',
+      baseCost: 1500, costGrowth: 6, maxLevel: 10, perLevel: 0.1, // +10% income per level
+    },
+    portCaptain: {
+      id: 'portCaptain', name: 'Mara', title: 'Port Captain', icon: '⚓',
+      blurb: 'Runs the port while you are away',
+      baseCost: 3000, costGrowth: 7, maxLevel: 8, perLevel: 30 * 60, // +30 min of offline earnings per level
+    },
+    eventsManager: {
+      id: 'eventsManager', name: 'Pip', title: 'Events Manager', icon: '🎉',
+      blurb: 'Makes the most of every visitor and event',
+      baseCost: 2000, costGrowth: 6, maxLevel: 10, perLevel: 0.2, // +20% event, VIP and daily rewards per level
+    },
+    broker: {
+      id: 'broker', name: 'Finch', title: 'Broker', icon: '💼',
+      blurb: 'Drives a hard bargain on new ports',
+      baseCost: 15000, costGrowth: 8, maxLevel: 8, perLevel: 0.08, // new ports 8% cheaper per level
+    },
   },
 
   events: {

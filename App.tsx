@@ -14,6 +14,8 @@ import { SettingsModal } from './src/ui/SettingsModal';
 import { PortSwitcher } from './src/ui/PortSwitcher';
 import { DailyModal, dailyBadge } from './src/ui/DailyModal';
 import { HeadOfficeModal } from './src/ui/HeadOfficeModal';
+import { ManagersModal } from './src/ui/ManagersModal';
+import { managersReady } from './src/sim/managers';
 import { MetaBar } from './src/ui/MetaBar';
 import { VipBanner } from './src/ui/VipBanner';
 import { EventBanner } from './src/ui/EventBanner';
@@ -42,6 +44,7 @@ export default function App() {
     claimDailyContract,
     welcomeVip,
     collectEvent,
+    hire,
     warp,
   } = useGame();
   const ad = useRewardedAd();
@@ -80,6 +83,7 @@ export default function App() {
   };
   const [officeOpen, setOfficeOpen] = useState(false);
   const [dailyOpen, setDailyOpen] = useState(false);
+  const [managersOpen, setManagersOpen] = useState(false);
   const [quantity, setQuantity] = useState<BuyQuantity>(1);
   const [panelOpen, togglePanel] = usePanelOpen();
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -158,8 +162,10 @@ export default function App() {
           stars={state.prestige.stars}
           pending={starsFor(state.runEarnings)}
           dailyBadge={dailyBadge(state, today())}
+          managersBadge={managersReady(state)}
           onHeadOffice={() => setOfficeOpen(true)}
           onDaily={() => setDailyOpen(true)}
+          onManagers={() => setManagersOpen(true)}
         />
         <PortSwitcher state={state} onSelect={choosePort} onBuyPort={buyNewPort} />
 
@@ -192,6 +198,7 @@ export default function App() {
         }}
         onClose={() => setOfficeOpen(false)}
       />
+      <ManagersModal visible={managersOpen} state={state} onHire={hire} onClose={() => setManagersOpen(false)} />
       <DailyModal
         visible={dailyOpen}
         state={state}
