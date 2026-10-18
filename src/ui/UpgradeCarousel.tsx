@@ -180,12 +180,16 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingVertical: 6,
     paddingHorizontal: 6,
+    // Always as tall as the two-line "cost + x10" form, so the pill doesn't
+    // jump when the buy quantity can stretch past one.
+    minHeight: 6 + 17 + 12 + 6,
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: theme.bg,
   },
   costPillReady: { backgroundColor: theme.money },
-  costText: { color: theme.disabled, fontSize: 13, fontWeight: '800' },
+  costText: { color: theme.disabled, fontSize: 13, lineHeight: 17, fontWeight: '800' },
   costTextReady: { color: theme.text },
-  costCount: { color: theme.text, fontSize: 9, fontWeight: '800', opacity: 0.75 },
+  costCount: { color: theme.text, fontSize: 9, lineHeight: 12, fontWeight: '800', opacity: 0.75 },
   costMaxed: { color: theme.textDim, fontSize: 12, fontWeight: '800', letterSpacing: 1 },
 });
