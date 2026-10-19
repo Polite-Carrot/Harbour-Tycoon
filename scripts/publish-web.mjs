@@ -13,7 +13,7 @@
  * (default /Harbour-Tycoon, the repo name).
  */
 import { execSync } from 'node:child_process';
-import { cpSync, existsSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -37,5 +37,11 @@ for (const name of published) {
 }
 writeFileSync(join(root, '.nojekyll'), '');
 
-console.log(`\nPublished the web build into the repo root (served at ${base}/).`);
+// Point the page at its files relatively, so the same build works wherever
+// Pages serves it: polite-carrot.github.io/Harbour-Tycoon/ or a custom domain
+// at its root. Only index.html carries the base path; the bundle doesn't.
+const page = join(root, 'index.html');
+writeFileSync(page, readFileSync(page, 'utf8').replaceAll(`"${base}/`, '"./'));
+
+console.log('\nPublished the web build into the repo root (relative paths, works on any domain).');
 console.log('Commit index.html, favicon.ico, metadata.json, _expo/ and .nojekyll, then push to main.');
