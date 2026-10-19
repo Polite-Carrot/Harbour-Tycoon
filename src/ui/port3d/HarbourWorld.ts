@@ -94,6 +94,7 @@ export class HarbourWorld {
     const s = this.scene;
     s.fog = this.fog;
     s.add(this.skyLayer.group, this.water.group, this.land.group, this.craneGroup, this.sea.group, this.aliens.group);
+    this.showLife(this.land.theme);
     this.terminal = new CruiseTerminal(this.windowMat);
     s.add(this.rail.group, this.dredger.group, this.terminal.group, this.tallShip.group, this.events.group);
     this.dredger.onSplash = (x, y, z, power) => this.sea.splash(x, y, z, power);
@@ -126,6 +127,18 @@ export class HarbourWorld {
   }
 
   /**
+   * Sea life at sea and on the seabed, aliens only on the moon and in orbit.
+   * Called from the constructor too: both groups start visible, and the
+   * first port is built without going through enter().
+   */
+  private showLife(theme: Theme) {
+    const world = worldOf(theme);
+    this.sea.group.visible = WORLDS[world].seaLife;
+    this.aliens.group.visible = world === 'moon' || world === 'space';
+    if (world === 'moon' || world === 'space') this.aliens.setWorld(world);
+  }
+
+  /**
    * Arrive in a port with a different setting: rebuild the land around the
    * quay, swap the tugs for the right kind, and set the sea, the air and
    * the cargo for this world. Ships and cranes rebuild on their own, since
@@ -140,10 +153,7 @@ export class HarbourWorld {
     this.scene.add(this.land.group);
     this.water.setTint(theme.water);
     this.water.group.visible = look.sea;
-    this.sea.group.visible = look.seaLife;
-    const world = worldOf(theme);
-    this.aliens.group.visible = world === 'moon' || world === 'space';
-    if (world === 'moon' || world === 'space') this.aliens.setWorld(world);
+    this.showLife(theme);
     this.skyLayer.setClouds(look.clouds);
     this.fog.near = look.fog[0];
     this.fog.far = look.fog[1];

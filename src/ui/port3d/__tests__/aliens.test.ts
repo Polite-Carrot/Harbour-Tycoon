@@ -56,6 +56,13 @@ describe('aliens instead of sea life', () => {
     }
   });
 
+  it('keeps the aliens hidden at an ordinary port from the very first frame', () => {
+    const w = new HarbourWorld();
+    const priv = w as unknown as { aliens: AlienLife; sea: { group: THREE.Group }; land: { theme: unknown } };
+    expect(priv.aliens.group.visible).toBe(false);
+    expect(priv.sea.group.visible).toBe(true);
+  });
+
   it('raises alien sightings in orbit and on the moon, sea-life ones elsewhere', () => {
     const w = new HarbourWorld();
     const enter = (id: string) => (w as unknown as { enter: (t: unknown) => void }).enter(THEMES.find((t) => t.id === id)!);
