@@ -15,6 +15,8 @@ interface Props {
   quantity: BuyQuantity;
   onQuantity: (q: BuyQuantity) => void;
   onBuy: (id: UpgradeId) => void;
+  /** A tile the tutorial is pointing at. */
+  highlight?: UpgradeId;
 }
 
 /**
@@ -27,7 +29,7 @@ interface Props {
  * Tracks the player cannot afford yet still show, dimmed, so the right-hand end
  * of the rail reads as something to work toward.
  */
-export function UpgradeCarousel({ entries, gains, quantity, onQuantity, onBuy }: Props) {
+export function UpgradeCarousel({ entries, gains, quantity, onQuantity, onBuy, highlight }: Props) {
   return (
     <View style={styles.dock}>
       <View style={styles.headerRow}>
@@ -71,6 +73,7 @@ export function UpgradeCarousel({ entries, gains, quantity, onQuantity, onBuy }:
               style={({ pressed }) => [
                 styles.tile,
                 enabled ? styles.tileReady : styles.tileIdle,
+                highlight === entry.id && styles.tileHighlight,
                 pressed && enabled && styles.tilePressed,
               ]}
             >
@@ -166,6 +169,7 @@ const styles = StyleSheet.create({
   },
   tileIdle: { backgroundColor: theme.panel, borderColor: theme.border, opacity: 0.55 },
   tileReady: { backgroundColor: theme.panelAlt, borderColor: theme.accent, borderWidth: 2 },
+  tileHighlight: { borderColor: '#e63946', borderWidth: 3, opacity: 1 },
   tilePressed: { backgroundColor: theme.border },
 
   tileName: { color: theme.text, fontSize: 14, fontWeight: '800' },

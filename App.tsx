@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import { UPGRADE_ORDER, type UpgradeId } from './src/config/balance';
@@ -19,7 +19,12 @@ import { managersReady } from './src/sim/managers';
 import { MetaBar } from './src/ui/MetaBar';
 import { VipBanner } from './src/ui/VipBanner';
 import { EventBanner } from './src/ui/EventBanner';
-import { starsFor } from './src/sim/prestige';
+import { starsForSale } from './src/sim/prestige';
+import { formatDuration } from './src/sim/format';
+import { play, startSound } from './src/audio/sound';
+import { ResearchModal, labIdle } from './src/ui/ResearchModal';
+import { EmpireModal } from './src/ui/EmpireModal';
+import { TUTORIAL, TutorialCard } from './src/ui/Tutorial';
 import { today } from './src/state/useGame';
 import { useRewardedAd } from './src/ads/rewardedAd';
 import { TimeWarpButton, TimeWarpModal } from './src/ui/TimeWarp';
@@ -46,8 +51,16 @@ export default function App() {
     collectEvent,
     hire,
     warp,
+    research,
+    speedUpLab,
+    found,
+    buyLegacyUpgrade,
+    setTutorial,
   } = useGame();
   const ad = useRewardedAd();
+  useEffect(() => {
+    void startSound();
+  }, []);
   const [warpOpen, setWarpOpen] = useState(false);
   const [warpBusy, setWarpBusy] = useState(false);
   const [warpCollected, setWarpCollected] = useState<number | null>(null);
@@ -81,6 +94,15 @@ export default function App() {
     // Closing the ad early keeps the popup, so the player can still collect.
     if (rewarded) boostOfflineReport();
   };
+  const [labAdBusy, setLabAdBusy] = useState(false);
+  const watchForLab = async () => {
+    setLabAdBusy(true);
+    const rewarded = await ad.show();
+    setLabAdBusy(false);
+    if (rewarded) speedUpLab();
+  };
+  const [researchOpen, setResearchOpen] = useState(false);
+  const [empireOpen, setEmpireOpen] = useState(false);
   const [officeOpen, setOfficeOpen] = useState(false);
   const [dailyOpen, setDailyOpen] = useState(false);
   const [managersOpen, setManagersOpen] = useState(false);
@@ -110,6 +132,32 @@ export default function App() {
     const ready = entries.filter((e) => e.affordable && !e.maxed && (gains[e.id] ?? 0) > 0).length;
     return { index, port, stats, income, entries, gains, ready, summary: gameStats(state) };
   }, [state, quantity]);
+
+  // A ship's horn as one docks at the port on screen (rate-limited in sound.ts).
+  const berth = useRef<{ index: number; pos: number } | null>(null);
+  useEffect(() => {
+    if (!view) return;
+    const pos = view.port.berthCycleSeconds;
+    const prev = berth.current;
+    berth.current = { index: view.index, pos };
+    if (!prev || prev.index !== view.index) return;
+    const arrival = view.stats.arrivalSeconds;
+    const docked = prev.pos <= pos ? prev.pos < arrival && pos >= arrival : pos >= arrival || prev.pos < arrival;
+    if (docked) play('horn');
+  }, [view]);
+
+  // Tutorial steps that ask for an action move on once it is done.
+  const tutorialStep = state && !state.tutorial.done ? TUTORIAL[state.tutorial.step] : undefined;
+  const tutorialMet = !!(state && tutorialStep?.doneWhen?.(state));
+  useEffect(() => {
+    if (state && tutorialMet) setTutorial(state.tutorial.step + 1);
+  }, [state, tutorialMet, setTutorial]);
+  const nextTutorial = () => {
+    if (!state) return;
+    const next = state.tutorial.step + 1;
+    play('tap');
+    setTutorial(next, next >= TUTORIAL.length);
+  };
 
   if (!ready || !state || !view) {
     return (
@@ -153,6 +201,14 @@ export default function App() {
         />
         <TimeWarpButton state={state} day={today()} now={Date.now()} onPress={() => setWarpOpen(true)} />
         <SettingsButton onPress={() => setSettingsOpen(true)} />
+        {!offlineReport && (
+          <TutorialCard
+            state={state}
+            panelOpen={panelOpen}
+            onNext={nextTutorial}
+            onSkip={() => setTutorial(state.tutorial.step, true)}
+          />
+        )}
       </View>
 
       <PanelHandle open={panelOpen} ready={view.ready} onToggle={togglePanel} />
@@ -160,12 +216,27 @@ export default function App() {
       <View style={[styles.controls, !panelOpen && styles.hidden]}>
         <MetaBar
           stars={state.prestige.stars}
-          pending={starsFor(state.runEarnings)}
+          pending={starsForSale(state)}
           dailyBadge={dailyBadge(state, today())}
           managersBadge={managersReady(state)}
-          onHeadOffice={() => setOfficeOpen(true)}
-          onDaily={() => setDailyOpen(true)}
-          onManagers={() => setManagersOpen(true)}
+          labIdle={labIdle(state)}
+          researchLeft={state.research.active ? formatDuration((state.research.active.endsAt - Date.now()) / 1000) : null}
+          onHeadOffice={() => {
+            play('tap');
+            setOfficeOpen(true);
+          }}
+          onDaily={() => {
+            play('tap');
+            setDailyOpen(true);
+          }}
+          onManagers={() => {
+            play('tap');
+            setManagersOpen(true);
+          }}
+          onResearch={() => {
+            play('tap');
+            setResearchOpen(true);
+          }}
         />
         <PortSwitcher state={state} onSelect={choosePort} onBuyPort={buyNewPort} />
 
@@ -175,6 +246,7 @@ export default function App() {
           quantity={quantity}
           onQuantity={setQuantity}
           onBuy={(id) => buy(id, quantity)}
+          highlight={tutorialStep?.target === 'cranes' ? 'cranes' : undefined}
         />
 
       </View>
@@ -187,6 +259,10 @@ export default function App() {
           setSettingsOpen(false);
           void resetGame();
         }}
+        onReplayTutorial={() => {
+          setSettingsOpen(false);
+          setTutorial(0, false);
+        }}
       />
 
       <HeadOfficeModal
@@ -196,7 +272,30 @@ export default function App() {
           setOfficeOpen(false);
           sell();
         }}
+        onEmpire={() => {
+          setOfficeOpen(false);
+          setEmpireOpen(true);
+        }}
         onClose={() => setOfficeOpen(false)}
+      />
+      <EmpireModal
+        visible={empireOpen}
+        state={state}
+        onFound={() => {
+          setEmpireOpen(false);
+          found();
+        }}
+        onBuy={buyLegacyUpgrade}
+        onClose={() => setEmpireOpen(false)}
+      />
+      <ResearchModal
+        visible={researchOpen && !ad.element}
+        state={state}
+        now={Date.now()}
+        busy={labAdBusy}
+        onStart={research}
+        onWatchAd={watchForLab}
+        onClose={() => setResearchOpen(false)}
       />
       <ManagersModal visible={managersOpen} state={state} onHire={hire} onClose={() => setManagersOpen(false)} />
       <DailyModal
