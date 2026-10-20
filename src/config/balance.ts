@@ -23,6 +23,33 @@ export type UpgradeId =
 
 export type ManagerId = 'dockBoss' | 'portCaptain' | 'eventsManager' | 'broker';
 
+export type ResearchId = 'automation' | 'forecasting' | 'sonar' | 'planning';
+
+export interface ResearchConfig {
+  readonly id: ResearchId;
+  readonly name: string;
+  readonly icon: string;
+  readonly blurb: string;
+  readonly maxLevel: number;
+  /** How long level 0 -> 1 takes; each later level takes `timeGrowth` times longer. */
+  readonly baseSeconds: number;
+  readonly timeGrowth: number;
+  /** What one level adds (a fraction, or seconds for forecasting). */
+  readonly perLevel: number;
+}
+
+export type LegacyId = 'oldMoney' | 'agency' | 'grants' | 'nightWatch';
+
+export interface LegacyConfig {
+  readonly id: LegacyId;
+  readonly name: string;
+  readonly icon: string;
+  readonly blurb: string;
+  readonly maxLevel: number;
+  /** What one level adds (a multiplier step, a fraction, or seconds). */
+  readonly perLevel: number;
+}
+
 export interface ManagerConfig {
   readonly id: ManagerId;
   /** Their name, job title and emoji portrait. */
@@ -155,6 +182,28 @@ export interface BalanceConfig {
    * Head Office lets them go.
    */
   readonly managers: Readonly<Record<ManagerId, ManagerConfig>>;
+  /**
+   * Research: one project at a time, running on the real clock (away time
+   * too). Results are permanent: they survive selling the company and
+   * founding an Empire. Every bonus is capped.
+   */
+  readonly research: {
+    readonly projects: Readonly<Record<ResearchId, ResearchConfig>>;
+    /** Watching a rewarded ad cuts what is left of a project by this share, once per project. */
+    readonly adCut: number;
+  };
+  /**
+   * Shipping Empire: the second prestige layer. Founding one gives up the
+   * Reputation stars (and with them the perks) for Anchors, spent on Legacy
+   * upgrades that last for good.
+   */
+  readonly empire: {
+    /** Stars needed before an Empire can be founded. */
+    readonly minStars: number;
+    /** Stars per Anchor. */
+    readonly starsPerAnchor: number;
+    readonly legacy: Readonly<Record<LegacyId, LegacyConfig>>;
+  };
   /** Reasons to come back every day. */
   readonly daily: {
     /** Login streak: minutes of income paid on streak day 1..7 (cycles). */
@@ -458,6 +507,62 @@ export const BALANCE: BalanceConfig = {
       id: 'broker', name: 'Finch', title: 'Broker', icon: '💼',
       blurb: 'Drives a hard bargain on new ports',
       baseCost: 15000, costGrowth: 8, maxLevel: 8, perLevel: 0.08, // new ports 8% cheaper per level
+    },
+  },
+
+  research: {
+    // First levels finish in minutes; the top ones take a good part of a day.
+    projects: {
+      automation: {
+        id: 'automation', name: 'Automated Cranes', icon: '🤖',
+        blurb: 'Smarter cranes at every port',
+        maxLevel: 10, baseSeconds: 5 * 60, timeGrowth: 1.6, perLevel: 0.1, // +10% income per level
+      },
+      forecasting: {
+        id: 'forecasting', name: 'Weather Forecasting', icon: '🌦️',
+        blurb: 'Plan ahead, so the port runs longer while you are away',
+        maxLevel: 6, baseSeconds: 10 * 60, timeGrowth: 1.8, perLevel: 30 * 60, // +30 min offline per level
+      },
+      sonar: {
+        id: 'sonar', name: 'Sonar Mapping', icon: '📡',
+        blurb: 'Better rewards from events, VIPs and daily rewards',
+        maxLevel: 6, baseSeconds: 8 * 60, timeGrowth: 1.8, perLevel: 0.15, // +15% per level
+      },
+      planning: {
+        id: 'planning', name: 'Port Planning', icon: '📐',
+        blurb: 'Surveyed sites make new ports cheaper',
+        maxLevel: 6, baseSeconds: 15 * 60, timeGrowth: 1.8, perLevel: 0.06, // 6% cheaper per level, compounding
+      },
+    },
+    adCut: 0.5,
+  },
+
+  empire: {
+    // Around the Trade Empire perk: seven or eight sales in. 100 stars per
+    // Anchor makes that first Empire worth 5, enough for a couple of levels.
+    minStars: 500,
+    starsPerAnchor: 100,
+    legacy: {
+      oldMoney: {
+        id: 'oldMoney', name: 'Old Money', icon: '💰',
+        blurb: 'All income doubled per level, for good',
+        maxLevel: 8, perLevel: 2, // x2 income per level, compounding
+      },
+      agency: {
+        id: 'agency', name: 'Reputation Agency', icon: '📣',
+        blurb: 'Selling the company pays more stars',
+        maxLevel: 8, perLevel: 0.5, // +50% stars per sale per level
+      },
+      grants: {
+        id: 'grants', name: 'Research Grants', icon: '🎓',
+        blurb: 'Research finishes faster',
+        maxLevel: 4, perLevel: 0.2, // 20% faster per level, compounding
+      },
+      nightWatch: {
+        id: 'nightWatch', name: 'Night Watch', icon: '🌙',
+        blurb: 'Offline earnings build up for longer',
+        maxLevel: 4, perLevel: 2 * 60 * 60, // +2 hours per level
+      },
     },
   },
 
