@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Platform, type AppStateStatus } from 'react-native';
-import { BALANCE, type ManagerId, type UpgradeId } from '../config/balance';
+import { BALANCE, type LegacyId, type ManagerId, type ResearchId, type UpgradeId } from '../config/balance';
+import { play, type SoundName } from '../audio/sound';
+import { buyLegacy } from '../sim/empire';
 import { hireManager } from '../sim/managers';
+import { finishResearch, speedUpResearch, startResearch } from '../sim/research';
 import { dayIndex, rollDay } from '../sim/daily';
 import { totalIncome } from '../sim/economy';
 import {
@@ -15,6 +18,7 @@ import {
   claimTimeWarp,
   claimVip,
   createNewGame,
+  foundEmpire,
   selectPort,
   sellCompany,
 } from '../sim/engine';
@@ -38,6 +42,13 @@ function withToday(state: GameState, now: number): GameState {
   return rollDay(state, day, totalIncome(state), gameStats(state).shipsPerMinute);
 }
 
+/** Bank research that finished since the last look, with a chime. */
+function withResearch(state: GameState, now: number): GameState {
+  const r = finishResearch(state, now);
+  if (r.finished) play('chime');
+  return r.state;
+}
+
 export function useGame() {
   // The authoritative state lives in a ref so ticks never read a stale
   // closure; `snapshot` is just the copy React renders.
@@ -57,7 +68,7 @@ export function useGame() {
       const current = stateRef.current;
       if (!current) return;
       const { result, report } = catchUp(current, now, BALANCE, offline);
-      commit(withToday(result.state, now));
+      commit(withResearch(withToday(result.state, now), now));
       if (report && report.awaySeconds >= BALANCE.offline.minReportSeconds && report.earned > 0) {
         setOfflineReport(report);
       }
@@ -154,16 +165,22 @@ export function useGame() {
   }, [ready, settle]);
 
   // --- actions --------------------------------------------------------------
-  /** Settle to now, apply `change`, commit, and persist if anything happened. */
+  /**
+   * Settle to now, apply `change`, commit, and persist if anything happened,
+   * playing `sound` when it did.
+   */
   const act = useCallback(
-    (change: (s: GameState) => { state: GameState; changed: boolean }) => {
+    (change: (s: GameState) => { state: GameState; changed: boolean }, sound?: SoundName) => {
       const current = stateRef.current;
       if (!current) return;
       // Settle first so the action can't swallow or duplicate a partial tick.
       const settled = catchUp(current, Date.now(), BALANCE, false).result.state;
       const { state: next, changed } = change(settled);
       commit(next);
-      if (changed) void saveGame(next);
+      if (changed) {
+        void saveGame(next);
+        if (sound) play(sound);
+      }
     },
     [commit],
   );
@@ -173,7 +190,7 @@ export function useGame() {
       act((s) => {
         const r = buyUpgrade(s, id, quantity);
         return { state: r.state, changed: r.bought > 0 };
-      });
+      }, 'buy');
     },
     [act],
   );
@@ -182,7 +199,7 @@ export function useGame() {
     act((s) => {
       const r = buyPort(s);
       return { state: r.state, changed: r.bought };
-    });
+    }, 'clank');
   }, [act]);
 
   const choosePort = useCallback(
@@ -190,7 +207,7 @@ export function useGame() {
       act((s) => {
         const next = selectPort(s, index);
         return { state: next, changed: next !== s };
-      });
+      }, 'tap');
     },
     [act],
   );
@@ -199,14 +216,14 @@ export function useGame() {
     act((s) => {
       const r = sellCompany(s, Date.now());
       return { state: r.state, changed: r.stars > 0 };
-    });
+    }, 'fanfare');
   }, [act]);
 
   const claimDailyLogin = useCallback(() => {
     act((s) => {
       const r = claimLogin(s, today(), Date.now());
       return { state: r.state, changed: !!r.reward };
-    });
+    }, 'cash');
   }, [act]);
 
   const claimDailyContract = useCallback(
@@ -214,7 +231,7 @@ export function useGame() {
       act((s) => {
         const r = claimContract(s, index, Date.now());
         return { state: r.state, changed: !!r.reward };
-      });
+      }, 'cash');
     },
     [act],
   );
@@ -223,7 +240,7 @@ export function useGame() {
     act((s) => {
       const r = claimVip(s, Date.now());
       return { state: r.state, changed: !!r.reward };
-    });
+    }, 'cash');
   }, [act]);
 
   /** Hire a manager, or promote one already working for you. */
@@ -232,7 +249,7 @@ export function useGame() {
       act((s) => {
         const r = hireManager(s, id);
         return { state: r.state, changed: r.hired };
-      });
+      }, 'buy');
     },
     [act],
   );
@@ -242,7 +259,7 @@ export function useGame() {
     act((s) => {
       const r = claimEvent(s, Date.now(), BALANCE, opts);
       return { state: r.state, changed: !!r.reward };
-    });
+    }, 'cash');
   }, [act]);
 
   /** Pay a Time Warp. Returns what it paid (0 if refused). Call after the ad. */
@@ -252,7 +269,7 @@ export function useGame() {
       const r = claimTimeWarp(s, today(), Date.now());
       paid = r.earned;
       return { state: r.state, changed: r.earned > 0 };
-    });
+    }, 'cash');
     return paid;
   }, [act]);
 
@@ -262,7 +279,57 @@ export function useGame() {
     setOfflineReport(null);
   }, [commit]);
 
-  const dismissOfflineReport = useCallback(() => setOfflineReport(null), []);
+  const dismissOfflineReport = useCallback(() => {
+    // The money was paid on resume; this is the player collecting it.
+    play('cash');
+    setOfflineReport(null);
+  }, []);
+
+  const research = useCallback(
+    (id: ResearchId) => {
+      act((s) => {
+        const r = startResearch(s, id, Date.now());
+        return { state: r.state, changed: r.started };
+      }, 'buy');
+    },
+    [act],
+  );
+
+  /** Halve what is left of the running project. Call only after the ad. */
+  const speedUpLab = useCallback(() => {
+    act((s) => {
+      const r = speedUpResearch(s, Date.now());
+      return { state: r.state, changed: r.cut > 0 };
+    }, 'chime');
+  }, [act]);
+
+  const found = useCallback(() => {
+    act((s) => {
+      const r = foundEmpire(s, Date.now());
+      return { state: r.state, changed: r.anchors > 0 };
+    }, 'fanfare');
+  }, [act]);
+
+  const buyLegacyUpgrade = useCallback(
+    (id: LegacyId) => {
+      act((s) => {
+        const r = buyLegacy(s, id);
+        return { state: r.state, changed: r.bought };
+      }, 'buy');
+    },
+    [act],
+  );
+
+  /** Move the walkthrough on (or end it, with `done`). */
+  const setTutorial = useCallback(
+    (step: number, done = false) => {
+      act((s) => {
+        if (s.tutorial.step === step && s.tutorial.done === done) return { state: s, changed: false };
+        return { state: { ...s, tutorial: { step, done } }, changed: true };
+      });
+    },
+    [act],
+  );
 
   /**
    * Pay the "while away" ad bonus and close the popup. Returns the extra paid.
@@ -277,7 +344,7 @@ export function useGame() {
       const r = claimOfflineAdBonus(s, report, Date.now());
       paid = r.earned;
       return { state: r.state, changed: r.earned > 0 };
-    });
+    }, 'cash');
     setOfflineReport(null);
     return paid;
   }, [act, offlineReport]);
@@ -299,5 +366,10 @@ export function useGame() {
     collectEvent,
     hire,
     warp,
+    research,
+    speedUpLab,
+    found,
+    buyLegacyUpgrade,
+    setTutorial,
   };
 }

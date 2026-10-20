@@ -1,4 +1,4 @@
-import { BALANCE, UPGRADE_ORDER, type BalanceConfig, type ManagerId, type UpgradeId } from '../config/balance';
+import { BALANCE, UPGRADE_ORDER, type BalanceConfig, type LegacyId, type ManagerId, type ResearchId, type UpgradeId } from '../config/balance';
 import {
   activeVip,
   canClaimLogin,
@@ -22,12 +22,14 @@ import {
   dailyRewardMultiplier,
   incomeMultiplier,
   offlineCapSeconds,
-  starsFor,
+  starsForSale,
   startingLevels,
   startingMoney,
 } from './prestige';
 import { activeEvent, eventReward } from './events';
 import { MANAGER_ORDER, emptyManagers } from './managers';
+import { LEGACY_ORDER, anchorsFor, emptyEmpire } from './empire';
+import { RESEARCH_ORDER, emptyResearch } from './research';
 import { warpReward, warpStatus, warpsUsedToday } from './timewarp';
 import {
   SAVE_VERSION,
@@ -37,6 +39,7 @@ import {
   type DailyState,
   type GameState,
   type OfflineReport,
+  type ActiveResearch,
   type PortState,
   type PrestigeState,
 } from './types';
@@ -73,6 +76,9 @@ export function createNewGame(
     managers: emptyManagers(),
     totals: { ships: 0, upgrades: 0 },
     timeWarp: { day: -1, used: 0, lastAt: 0 },
+    research: emptyResearch(),
+    empire: emptyEmpire(),
+    tutorial: { step: 0, done: false },
   };
 }
 
@@ -294,7 +300,7 @@ export function sellCompany(
   now: number,
   cfg: BalanceConfig = BALANCE,
 ): { state: GameState; stars: number } {
-  const stars = starsFor(state.runEarnings, cfg);
+  const stars = starsForSale(state, cfg);
   if (stars <= 0) return { state, stars: 0 };
 
   const prestige: PrestigeState = {
@@ -318,6 +324,36 @@ export function sellCompany(
   next.money = startingMoney(next, cfg);
   next.ports = [emptyPort(startingLevels(next))];
   return { state: next, stars };
+}
+
+/**
+ * Found a Shipping Empire (empire.ts): trade every star for Anchors and
+ * start again from one empty port. The perks go with the stars. Anchors,
+ * Legacy upgrades, research, daily progress and lifetime totals carry over.
+ */
+export function foundEmpire(
+  state: GameState,
+  now: number,
+  cfg: BalanceConfig = BALANCE,
+): { state: GameState; anchors: number } {
+  const anchors = anchorsFor(state, cfg);
+  if (anchors <= 0) return { state, anchors: 0 };
+  const next: GameState = {
+    ...state,
+    prestige: { ...state.prestige, stars: 0, bestRun: Math.max(state.prestige.bestRun, state.runEarnings) },
+    empire: { ...state.empire, anchors: state.empire.anchors + anchors, founded: state.empire.founded + 1 },
+    money: 0,
+    runEarnings: 0,
+    ports: [],
+    activePort: 0,
+    lastTickAt: now,
+    managers: emptyManagers(),
+    // A boost was paid for with the old company's income.
+    boostUntil: 0,
+  };
+  next.money = startingMoney(next, cfg);
+  next.ports = [emptyPort(startingLevels(next))];
+  return { state: next, anchors };
 }
 
 /** Pay a reward: money, any stars, and any boost (extending one that runs). */
@@ -503,6 +539,25 @@ function sanitiseManagers(raw: unknown, cfg: BalanceConfig): Record<ManagerId, n
   return out;
 }
 
+function levelsOf<K extends string>(raw: unknown, ids: readonly K[], max: (id: K) => number): Record<K, number> {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  const out = {} as Record<K, number>;
+  for (const id of ids) out[id] = Math.min(max(id), Math.max(0, Math.floor(num(r[id], 0))));
+  return out;
+}
+
+function sanitiseActiveResearch(raw: unknown, now: number): ActiveResearch | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const a = raw as Record<string, unknown>;
+  const id = RESEARCH_ORDER.find((x) => x === a.id);
+  const seconds = num(a.seconds, NaN);
+  const endsAt = num(a.endsAt, NaN);
+  if (!id || !(seconds > 0) || !Number.isFinite(endsAt)) return null;
+  // An end time further off than the whole project (clock moved back) is
+  // pulled in, so the player is never locked out.
+  return { id, seconds, endsAt: Math.min(endsAt, now + seconds * 1000), adUsed: a.adUsed === true };
+}
+
 export function sanitise(
   raw: unknown,
   now: number = Date.now(),
@@ -529,6 +584,9 @@ export function sanitise(
   const d = (r.daily ?? {}) as Record<string, unknown>;
   const t = (r.totals ?? {}) as Record<string, unknown>;
   const w = (r.timeWarp ?? {}) as Record<string, unknown>;
+  const rs = (r.research ?? {}) as Record<string, unknown>;
+  const em = (r.empire ?? {}) as Record<string, unknown>;
+  const tu = (r.tutorial ?? {}) as Record<string, unknown>;
   const kinds = ['ships', 'upgrades', 'earn'] as const;
   const contracts: Contract[] = (Array.isArray(d.contracts) ? d.contracts : [])
     .slice(0, 3)
@@ -575,6 +633,21 @@ export function sanitise(
       // A last-warp time in the future (clock moved back) would lock the
       // player out; clamp it to now.
       lastAt: Math.min(Math.max(0, num(w.lastAt, 0)), now),
+    },
+    research: {
+      levels: levelsOf<ResearchId>(rs.levels, RESEARCH_ORDER, (id) => cfg.research.projects[id].maxLevel),
+      active: sanitiseActiveResearch(rs.active, now),
+    },
+    empire: {
+      anchors: Math.max(0, Math.floor(num(em.anchors, 0))),
+      founded: Math.max(0, Math.floor(num(em.founded, 0))),
+      legacy: levelsOf<LegacyId>(em.legacy, LEGACY_ORDER, (id) => cfg.empire.legacy[id].maxLevel),
+    },
+    tutorial: {
+      step: Math.max(0, Math.floor(num(tu.step, 0))),
+      // A save from before the tutorial existed belongs to someone who
+      // already knows the game; don't walk them through it.
+      done: typeof tu.done === 'boolean' ? tu.done : lifetimeEarnings > 0,
     },
   };
 }

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { setSoundPrefs, useSoundPrefs } from '../audio/sound';
 import { formatCount, formatDuration, formatMoney, formatNumber } from '../sim/format';
 import type { GameStats } from '../sim/stats';
 import { theme } from './theme';
@@ -9,6 +10,8 @@ interface Props {
   stats: GameStats;
   onResume: () => void;
   onReset: () => void;
+  /** Play the first-time walkthrough again. */
+  onReplayTutorial: () => void;
 }
 
 /**
@@ -20,8 +23,9 @@ interface Props {
  * Modal — nested modals are unreliable on react-native-web, and this keeps the
  * destructive action on its own screen where nothing else is tappable.
  */
-export function SettingsModal({ visible, stats, onResume, onReset }: Props) {
+export function SettingsModal({ visible, stats, onResume, onReset, onReplayTutorial }: Props) {
   const [confirming, setConfirming] = useState(false);
+  const sound = useSoundPrefs();
 
   // Never reopen straight into the confirmation screen.
   useEffect(() => {
@@ -96,6 +100,11 @@ export function SettingsModal({ visible, stats, onResume, onReset }: Props) {
                 />
               </ScrollView>
 
+              <View style={styles.toggles}>
+                <Toggle label="🎵 Music" on={sound.music} onPress={() => setSoundPrefs({ music: !sound.music })} />
+                <Toggle label="🔊 Sound effects" on={sound.effects} onPress={() => setSoundPrefs({ effects: !sound.effects })} />
+              </View>
+
               <Pressable
                 style={({ pressed }) => [styles.primary, pressed && styles.primaryPressed]}
                 onPress={close}
@@ -103,14 +112,36 @@ export function SettingsModal({ visible, stats, onResume, onReset }: Props) {
                 <Text style={styles.primaryText}>Resume</Text>
               </Pressable>
 
-              <Pressable style={styles.secondary} onPress={() => setConfirming(true)}>
-                <Text style={styles.resetText}>Reset save</Text>
-              </Pressable>
+              <View style={styles.footer}>
+                <Pressable style={styles.secondary} onPress={onReplayTutorial} accessibilityRole="button">
+                  <Text style={styles.secondaryText}>Replay tutorial</Text>
+                </Pressable>
+                <Pressable style={styles.secondary} onPress={() => setConfirming(true)} accessibilityRole="button">
+                  <Text style={styles.resetText}>Reset save</Text>
+                </Pressable>
+              </View>
             </>
           )}
         </View>
       </View>
     </Modal>
+  );
+}
+
+function Toggle({ label, on, onPress }: { label: string; on: boolean; onPress: () => void }) {
+  return (
+    <Pressable
+      style={styles.toggle}
+      onPress={onPress}
+      accessibilityRole="switch"
+      accessibilityState={{ checked: on }}
+      accessibilityLabel={label}
+    >
+      <Text style={styles.toggleLabel}>{label}</Text>
+      <View style={[styles.track, on && styles.trackOn]}>
+        <View style={[styles.knob, on && styles.knobOn]} />
+      </View>
+    </Pressable>
   );
 }
 
@@ -231,7 +262,7 @@ const styles = StyleSheet.create({
   },
   title: { color: theme.text, fontSize: 19, fontWeight: '800', textAlign: 'center' },
 
-  statScroll: { maxHeight: 300 },
+  statScroll: { maxHeight: 230 },
   stats: { gap: 7, paddingVertical: 4 },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
   rowLabel: { color: theme.textDim, fontSize: 13, flexShrink: 1 },
@@ -249,7 +280,15 @@ const styles = StyleSheet.create({
   primaryPressed: { opacity: 0.85 },
   primaryText: { color: theme.onAccent, fontSize: 15, fontWeight: '800' },
 
-  secondary: { paddingVertical: 10, alignItems: 'center' },
+  secondary: { paddingVertical: 10, paddingHorizontal: 8, alignItems: 'center' },
+  footer: { flexDirection: 'row', justifyContent: 'space-between' },
+  toggles: { gap: 6, marginTop: 4 },
+  toggle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 4 },
+  toggleLabel: { color: theme.text, fontSize: 14, fontWeight: '700' },
+  track: { width: 44, height: 26, borderRadius: 13, backgroundColor: theme.disabled, padding: 3 },
+  trackOn: { backgroundColor: theme.good },
+  knob: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#ffffff' },
+  knobOn: { transform: [{ translateX: 18 }] },
   secondaryText: { color: theme.textDim, fontSize: 14, fontWeight: '700' },
   resetText: { color: theme.disabled, fontSize: 13, fontWeight: '700' },
 

@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { BALANCE } from '../config/balance';
 import { formatMoney, formatCount } from '../sim/format';
-import { PERKS, earningsForStars, hasPerk, incomeMultiplier, nextPerk, starsFor } from '../sim/prestige';
+import { anchorsFor } from '../sim/empire';
+import { PERKS, earningsForStars, hasPerk, incomeMultiplier, nextPerk, starsFor, starsForSale } from '../sim/prestige';
 import type { GameState } from '../sim/types';
 import { theme } from './theme';
 
@@ -10,6 +11,8 @@ interface Props {
   visible: boolean;
   state: GameState;
   onSell: () => void;
+  /** Open the Shipping Empire screen. */
+  onEmpire: () => void;
   onClose: () => void;
 }
 
@@ -18,7 +21,7 @@ interface Props {
  * now, and the perk ladder. Selling is guarded by a confirmation screen that
  * spells out exactly what is kept and what is lost.
  */
-export function HeadOfficeModal({ visible, state, onSell, onClose }: Props) {
+export function HeadOfficeModal({ visible, state, onSell, onEmpire, onClose }: Props) {
   const [confirming, setConfirming] = useState(false);
   useEffect(() => {
     if (!visible) setConfirming(false);
@@ -26,18 +29,22 @@ export function HeadOfficeModal({ visible, state, onSell, onClose }: Props) {
   if (!visible) return null;
 
   const stars = state.prestige.stars;
-  const pending = starsFor(state.runEarnings);
+  // The bar and next-star target follow the run's base worth; the Reputation
+  // Agency multiplies what a sale actually pays.
+  const base = starsFor(state.runEarnings);
+  const pending = starsForSale(state);
+  const anchors = anchorsFor(state);
   const bonus = (incomeMultiplier(state) - 1) * 100;
   const after = { ...state, prestige: { ...state.prestige, stars: stars + pending } };
   const bonusAfter = (incomeMultiplier(after) - 1) * 100;
-  const nextAt = earningsForStars(pending + 1);
-  const prevAt = pending > 0 ? earningsForStars(pending) : 0;
+  const nextAt = earningsForStars(base + 1);
+  const prevAt = base > 0 ? earningsForStars(base) : 0;
   // Progress toward the next star, on a log scale — earnings grow by orders
   // of magnitude, so a linear bar would sit at zero and then jump.
   const progress =
     state.runEarnings <= 0
       ? 0
-      : pending === 0
+      : base === 0
         ? Math.min(1, Math.max(0, Math.log10(Math.max(1, state.runEarnings)) / Math.log10(BALANCE.prestige.minEarnings)))
         : Math.min(1, Math.max(0, (Math.log10(state.runEarnings) - Math.log10(prevAt)) / (Math.log10(nextAt) - Math.log10(prevAt))));
   const upcoming = nextPerk(state);
@@ -106,7 +113,7 @@ export function HeadOfficeModal({ visible, state, onSell, onClose }: Props) {
                   <View style={[styles.barFill, { width: `${Math.round(progress * 100)}%` }]} />
                 </View>
                 <Text style={styles.hint}>
-                  {pending === 0
+                  {base === 0
                     ? `Earn ${formatMoney(BALANCE.prestige.minEarnings)} in a run for your first star`
                     : `Next star at ${formatMoney(nextAt)} earned`}
                 </Text>
@@ -138,6 +145,22 @@ export function HeadOfficeModal({ visible, state, onSell, onClose }: Props) {
                   );
                 })}
               </ScrollView>
+
+              <Pressable
+                style={({ pressed }) => [styles.empire, pressed && styles.pressed]}
+                onPress={onEmpire}
+                accessibilityRole="button"
+                accessibilityLabel="Shipping Empire"
+              >
+                <Text style={styles.empireTitle}>⚓ Shipping Empire</Text>
+                <Text style={styles.empireSub}>
+                  {anchors > 0
+                    ? `Found one now for ⚓ ${formatCount(anchors)}`
+                    : state.empire.founded > 0 || state.empire.anchors > 0
+                      ? `⚓ ${formatCount(state.empire.anchors)} Anchors · Legacy upgrades`
+                      : `Unlocks at ⭐ ${formatCount(BALANCE.empire.minStars)}`}
+                </Text>
+              </Pressable>
 
               <Pressable style={styles.secondary} onPress={onClose} accessibilityRole="button">
                 <Text style={styles.secondaryText}>Close</Text>
@@ -206,4 +229,7 @@ const styles = StyleSheet.create({
   perkBlurb: { color: theme.textDim, fontSize: 11 },
   perkStars: { color: theme.textDim, fontSize: 12, fontWeight: '800' },
   dim: { color: theme.textDim },
+  empire: { backgroundColor: '#3b1f5c', borderRadius: 10, paddingVertical: 9, paddingHorizontal: 12, alignItems: 'center', gap: 1 },
+  empireTitle: { color: '#ffd23f', fontSize: 14, fontWeight: '900' },
+  empireSub: { color: '#e9ddff', fontSize: 11, fontWeight: '700' },
 });

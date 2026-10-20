@@ -1,4 +1,4 @@
-import type { ManagerId, UpgradeId } from '../config/balance';
+import type { LegacyId, ManagerId, ResearchId, UpgradeId } from '../config/balance';
 
 /**
  * Current save schema version.
@@ -8,8 +8,41 @@ import type { ManagerId, UpgradeId } from '../config/balance';
  * 4 -> Time Warp usage.
  * 5 -> money scaled down (smaller numbers, same pacing): older saves have
  *      their money and Ship Size / Contracts levels shrunk to match.
+ * 6 -> research, the Shipping Empire and the first-time tutorial.
  */
-export const SAVE_VERSION = 5;
+export const SAVE_VERSION = 6;
+
+/** The project in the lab right now. */
+export interface ActiveResearch {
+  id: ResearchId;
+  /** Epoch millis it finishes. */
+  endsAt: number;
+  /** How long it took in all, in seconds, for the progress bar. */
+  seconds: number;
+  /** The rewarded-ad speed-up has been used on this project. */
+  adUsed: boolean;
+}
+
+/** Research levels are permanent: nothing ever resets them. */
+export interface ResearchState {
+  levels: Record<ResearchId, number>;
+  active: ActiveResearch | null;
+}
+
+/** The second prestige layer (empire.ts). Survives everything. */
+export interface EmpireState {
+  /** Anchors in hand, to spend on Legacy upgrades. */
+  anchors: number;
+  /** How many Empires have been founded. */
+  founded: number;
+  legacy: Record<LegacyId, number>;
+}
+
+/** The first-time walkthrough (ui/Tutorial.tsx). */
+export interface TutorialState {
+  step: number;
+  done: boolean;
+}
 
 /** Rewarded-ad Time Warps: how many today, and when the last one was. */
 export interface TimeWarpState {
@@ -90,6 +123,9 @@ export interface GameState {
   /** Lifetime counters, kept across resets. */
   totals: { ships: number; upgrades: number };
   timeWarp: TimeWarpState;
+  research: ResearchState;
+  empire: EmpireState;
+  tutorial: TutorialState;
 }
 
 /** Stats derived from base config + one port's upgrade levels. Never persisted. */

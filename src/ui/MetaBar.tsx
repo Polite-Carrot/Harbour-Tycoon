@@ -9,16 +9,32 @@ interface Props {
   dailyBadge: number;
   /** Managers that could be hired or promoted right now. */
   managersBadge: number;
+  /** The lab is free and there is something to research. */
+  labIdle: boolean;
+  /** Time left on the running project, or null. */
+  researchLeft: string | null;
   onHeadOffice: () => void;
   onDaily: () => void;
   onManagers: () => void;
+  onResearch: () => void;
 }
 
-/** The big buttons above the ports: Head Office (prestige), Managers and Daily. */
-export function MetaBar({ stars, pending, dailyBadge, managersBadge, onHeadOffice, onDaily, onManagers }: Props) {
-  // Three across is tight on a phone: stack each button's icon over its text,
+/** The big buttons above the ports: Head Office (prestige), Managers, Research and Daily. */
+export function MetaBar({
+  stars,
+  pending,
+  dailyBadge,
+  managersBadge,
+  labIdle,
+  researchLeft,
+  onHeadOffice,
+  onDaily,
+  onManagers,
+  onResearch,
+}: Props) {
+  // Four across is tight on a phone: stack each button's icon over its text,
   // and keep the second line short.
-  const narrow = useWindowDimensions().width < 560;
+  const narrow = useWindowDimensions().width < 640;
   const button = [styles.button, narrow && styles.buttonNarrow];
   const text = narrow ? styles.textNarrow : null;
   return (
@@ -34,7 +50,7 @@ export function MetaBar({ stars, pending, dailyBadge, managersBadge, onHeadOffic
           <Text style={[styles.label, styles.light]} numberOfLines={1}>Head Office</Text>
           <Text style={[styles.sub, styles.lightDim]} numberOfLines={1}>
             ⭐ {formatCount(stars)}
-            {pending > 0 ? <Text style={styles.pending}>  +{formatCount(pending)}{narrow ? '' : ' to sell'}</Text> : null}
+            {pending > 0 ? <Text style={styles.pending}>{narrow ? ' ' : '  '}+{formatCount(pending)}{narrow ? '' : ' to sell'}</Text> : null}
           </Text>
         </View>
       </Pressable>
@@ -52,6 +68,23 @@ export function MetaBar({ stars, pending, dailyBadge, managersBadge, onHeadOffic
         {managersBadge > 0 && (
           <View style={[styles.badge, styles.badgeGood]}>
             <Text style={styles.badgeText}>{managersBadge}</Text>
+          </View>
+        )}
+      </Pressable>
+      <Pressable
+        onPress={onResearch}
+        style={({ pressed }) => [...button, styles.research, pressed && styles.pressed]}
+        accessibilityRole="button"
+        accessibilityLabel="Research"
+      >
+        <Text style={styles.icon}>🔬</Text>
+        <View style={[styles.shrink, text]}>
+          <Text style={styles.label} numberOfLines={1}>Research</Text>
+          <Text style={styles.sub} numberOfLines={1}>{researchLeft ?? (labIdle ? 'Lab free' : 'All done')}</Text>
+        </View>
+        {labIdle && (
+          <View style={[styles.badge, styles.badgeLab]}>
+            <Text style={styles.badgeText}>!</Text>
           </View>
         )}
       </Pressable>
@@ -95,6 +128,8 @@ const styles = StyleSheet.create({
   office: { backgroundColor: '#0b3d6b', borderColor: '#ffd23f' },
   daily: { backgroundColor: theme.panel, borderColor: theme.accent },
   managers: { backgroundColor: theme.panel, borderColor: theme.good },
+  research: { backgroundColor: theme.panel, borderColor: '#8e5bd6' },
+  badgeLab: { backgroundColor: '#8e5bd6' },
   shrink: { flexShrink: 1 },
   badgeGood: { backgroundColor: theme.good },
   pressed: { opacity: 0.85 },

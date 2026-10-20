@@ -1,5 +1,7 @@
 import { BALANCE, type BalanceConfig, type UpgradeId } from '../config/balance';
+import { legacyBonus } from './empire';
 import { managerBonus, managerLevel } from './managers';
+import { researchBonus, researchLevel } from './research';
 import type { GameState } from './types';
 
 /**
@@ -28,6 +30,14 @@ export function starsFor(runEarnings: number, cfg: BalanceConfig = BALANCE): num
   const { minEarnings, starScale } = cfg.prestige;
   if (!Number.isFinite(runEarnings) || runEarnings < minEarnings) return 0;
   return Math.floor(starScale * (Math.log10(runEarnings) - Math.log10(minEarnings)) + 1);
+}
+
+/**
+ * Stars selling the company right now would pay: the run's worth, raised by
+ * the Reputation Agency (empire.ts).
+ */
+export function starsForSale(state: Pick<GameState, 'runEarnings'> & Partial<Pick<GameState, 'empire'>>, cfg: BalanceConfig = BALANCE): number {
+  return Math.floor(starsFor(state.runEarnings, cfg) * legacyBonus(state, 'agency', cfg));
 }
 
 /** How much a run has to earn to be worth `stars` stars. Inverse of starsFor. */
@@ -67,6 +77,9 @@ export const PERKS: readonly Perk[] = [
   { id: 'dynasty', name: 'Shipping Dynasty', blurb: 'All income doubled again', stars: 1500 },
 ];
 
+/** Everything that can raise a bonus. Only Reputation is required, so small test states work. */
+type Bonuses = Pick<GameState, 'prestige'> & Partial<Pick<GameState, 'managers' | 'research' | 'empire'>>;
+
 export function hasPerk(state: Pick<GameState, 'prestige'>, id: PerkId): boolean {
   const perk = PERKS.find((p) => p.id === id);
   return !!perk && state.prestige.stars >= perk.stars;
@@ -78,21 +91,28 @@ export function nextPerk(state: Pick<GameState, 'prestige'>): Perk | null {
 }
 
 /** Permanent income multiplier from Reputation. Boosts are separate (time-limited). */
-export function incomeMultiplier(state: Pick<GameState, 'prestige'> & Partial<Pick<GameState, 'managers'>>, cfg: BalanceConfig = BALANCE): number {
+export function incomeMultiplier(state: Bonuses, cfg: BalanceConfig = BALANCE): number {
   const stars = Math.max(0, state.prestige?.stars ?? 0);
   return (
     (1 + stars * cfg.prestige.incomePerStar) *
     managerBonus('dockBoss', managerLevel(state, 'dockBoss'), cfg) *
+    researchBonus('automation', researchLevel(state, 'automation'), cfg) *
+    legacyBonus(state, 'oldMoney', cfg) *
     (hasPerk(state, 'goldenFleet') ? 2 : 1) *
     (hasPerk(state, 'dynasty') ? 2 : 1)
   );
 }
 
 /** How long offline earnings build up for. */
-export function offlineCapSeconds(state: Pick<GameState, 'prestige'> & Partial<Pick<GameState, 'managers'>>, cfg: BalanceConfig = BALANCE): number {
+export function offlineCapSeconds(state: Bonuses, cfg: BalanceConfig = BALANCE): number {
   const base = hasPerk(state, 'harbourMaster') ? 12 * 60 * 60 : hasPerk(state, 'nightShift') ? 8 * 60 * 60 : cfg.offline.capSeconds;
   // The Port Captain keeps things running a while longer.
-  return base + managerBonus('portCaptain', managerLevel(state, 'portCaptain'), cfg);
+  return (
+    base +
+    managerBonus('portCaptain', managerLevel(state, 'portCaptain'), cfg) +
+    researchBonus('forecasting', researchLevel(state, 'forecasting'), cfg) +
+    legacyBonus(state, 'nightWatch', cfg)
+  );
 }
 
 /** Money a fresh run starts with. */
@@ -106,11 +126,19 @@ export function startingLevels(state: Pick<GameState, 'prestige'>): Partial<Reco
 }
 
 /** Multiplier on the price of a new port. */
-export function portDiscount(state: Pick<GameState, 'prestige'> & Partial<Pick<GameState, 'managers'>>, cfg: BalanceConfig = BALANCE): number {
-  return (hasPerk(state, 'investors') ? 0.1 : 1) * managerBonus('broker', managerLevel(state, 'broker'), cfg);
+export function portDiscount(state: Bonuses, cfg: BalanceConfig = BALANCE): number {
+  return (
+    (hasPerk(state, 'investors') ? 0.1 : 1) *
+    managerBonus('broker', managerLevel(state, 'broker'), cfg) *
+    researchBonus('planning', researchLevel(state, 'planning'), cfg)
+  );
 }
 
 /** Multiplier on daily rewards and contract payouts. */
-export function dailyRewardMultiplier(state: Pick<GameState, 'prestige'> & Partial<Pick<GameState, 'managers'>>, cfg: BalanceConfig = BALANCE): number {
-  return (hasPerk(state, 'tradeEmpire') ? 2 : 1) * managerBonus('eventsManager', managerLevel(state, 'eventsManager'), cfg);
+export function dailyRewardMultiplier(state: Bonuses, cfg: BalanceConfig = BALANCE): number {
+  return (
+    (hasPerk(state, 'tradeEmpire') ? 2 : 1) *
+    managerBonus('eventsManager', managerLevel(state, 'eventsManager'), cfg) *
+    researchBonus('sonar', researchLevel(state, 'sonar'), cfg)
+  );
 }

@@ -173,6 +173,44 @@ top levels are late-run goals. The bonuses run through the same helpers as
 the Head Office perks (`prestige.ts`), so every payout and price includes
 them. Managers work for the company: selling it lets them go.
 
+**Research.** The 🔬 Research button opens the lab (`src/sim/research.ts`).
+One project runs at a time, on the real clock, so it keeps going while the
+game is closed. Each level takes longer than the last (5 minutes at first,
+hours at the top), and research is never reset, not even by founding an
+Empire. A rewarded ad halves what is left of a project, once per project.
+
+| project | per level | top level |
+|---|---|---|
+| 🤖 Automated Cranes | +10% income | 10 (+100%) |
+| 🌦️ Weather Forecasting | offline earnings build up 30 min longer | 6 (+3h) |
+| 📡 Sonar Mapping | +15% on events, VIP ships and daily rewards | 6 (+90%) |
+| 📐 Port Planning | new ports 6% cheaper (compounding) | 6 (~31% off) |
+
+**Shipping Empire (second prestige).** From Head Office, once Reputation
+reaches ⭐500 (`src/sim/empire.ts`). Founding an Empire gives up every star,
+and with them the perks, plus the company, for one ⚓ Anchor per 100 stars.
+Anchors buy Legacy upgrades that are never lost, at 1, 2, 3... Anchors a level:
+
+| Legacy upgrade | per level | top level |
+|---|---|---|
+| 💰 Old Money | all income x2 (compounding) | 8 (x256) |
+| 📣 Reputation Agency | +50% stars every time the company is sold | 8 (+400%) |
+| 🎓 Research Grants | research 20% faster (compounding) | 4 (~59% faster) |
+| 🌙 Night Watch | offline earnings build up 2h longer | 4 (+8h) |
+
+**Tutorial.** A brand-new game opens with a seven-step coach card
+(`src/ui/Tutorial.tsx`). Steps that ask the player to do something (buy
+Cranes, buy three more) move on by themselves; the rest have a button.
+It can be skipped, and Settings can replay it. Saves from before the
+tutorial existed skip it.
+
+**Sound.** Effects for buying, rewards, ports, research and selling, a
+ship's horn as one docks (at most every 25s), and a gentle looping tune
+(`src/audio/sound.ts`, files in `assets/sounds/`, all made for this game).
+Settings has Music and Sound effects switches, kept apart from the save so
+a reset never touches them. On the web, sound starts after the first tap,
+because browsers block audio until then.
+
 **Head Office (prestige).** Once a run has earned $1M, the company can be sold
 for Reputation stars. Stars are permanent: each adds +10% income on every port,
 for good. Star milestones unlock perks:
@@ -270,7 +308,8 @@ npm run build:web  # static web bundle into dist/
 The site is served straight from `main`, with no GitHub Actions: Settings ->
 Pages -> **Deploy from a branch** -> `main`, `/ (root)`. The built game is
 committed in the repo root next to the source (`index.html`, `favicon.ico`,
-`metadata.json`, `_expo/`, `.nojekyll`), so publishing an update is:
+`metadata.json`, `_expo/`, `assets/assets/` for the bundled sounds,
+`.nojekyll`), so publishing an update is:
 
 ```bash
 npm run publish:web   # typecheck, test, build, copy the build into the root
@@ -279,15 +318,17 @@ git add -A && git commit -m "Publish" && git push   # to main
 
 `publish:web` refuses to build if the typecheck or tests fail, and replaces
 the previous build (the bundle's file name changes every time). The site
-lands at `https://polite-carrot.github.io/Harbour-Tycoon/`.
+lands at `https://harbourtycoon.politecarrot.com/` (the `CNAME` file sets the
+custom domain).
 
 Two things about this are load-bearing:
 
-- **It is a subpath, not a root.** Expo's web export writes absolute asset
-  URLs (`/_expo/static/...`), which 404 under `/Harbour-Tycoon/`. The
-  publish script sets `PAGES_BASE_URL` (default `/Harbour-Tycoon`) and
+- **It is served from the domain root.** Expo's web export writes absolute
+  asset URLs (`/assets/assets/sounds/...`), so the build assumes it lives at
+  `/`. To serve it from a subpath instead (the plain github.io address,
+  `/Harbour-Tycoon/`), publish with `PAGES_BASE_URL=/Harbour-Tycoon`;
   `app.config.ts` feeds it to `experiments.baseUrl` so every URL is
-  rewritten. Locally it is empty, so dev still serves from root.
+  rewritten.
 - **`.nojekyll` is required.** Pages otherwise runs Jekyll, which drops
   underscore-prefixed directories (the whole `_expo/` bundle) and shows this
   README instead of the game.
