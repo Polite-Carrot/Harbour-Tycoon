@@ -4,7 +4,7 @@
  *
  * Unity Ads, from the Unity dashboard -> Monetization. Each platform is its
  * own app there, with its own Game ID and rewarded placement. A platform
- * left as null falls back to the labelled test ad.
+ * set to null falls back to the labelled test ad.
  */
 export interface UnityAdsApp {
   gameId: string;
@@ -14,8 +14,7 @@ export interface UnityAdsApp {
 
 export const UNITY_ADS: { ios: UnityAdsApp | null; android: UnityAdsApp | null } = {
   ios: { gameId: '800406628', rewarded: 'BP_Rewarded_iOS' },
-  // Add once the Android app is set up in the Unity dashboard.
-  android: null,
+  android: { gameId: '800406629', rewarded: 'BP_Rewarded_Android' },
 };
 
 /**

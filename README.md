@@ -317,9 +317,9 @@ local Expo module (`modules/unity-ads`, Swift and Kotlin around Unity's SDK
 | platform | Game ID | rewarded placement |
 |---|---|---|
 | iOS | 800406628 | BP_Rewarded_iOS |
-| Android | not set up yet | not set up yet |
+| Android | 800406629 | BP_Rewarded_Android |
 
-A platform without IDs, the website and Expo Go show a labelled 15-second
+The website and Expo Go show a labelled 15-second
 test ad instead. Development builds ask Unity for test ads; release builds
 show real ones (add a phone under Monetization -> Settings -> Test device in
 the Unity dashboard to get test ads on a release build).
