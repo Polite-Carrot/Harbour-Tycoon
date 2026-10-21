@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { UnityAds } from '../../modules/unity-ads';
 import { UNITY_ADS, UNITY_TEST_MODE, type UnityAdsApp } from './config';
+import { consentGranted, loadPrivacy, onPrivacyChange } from '../privacy/privacy';
 
 /**
  * Rewarded ads, behind one small interface so the ad network can be swapped
@@ -28,11 +29,33 @@ const unity = UnityAds && unityApp ? { sdk: UnityAds, app: unityApp } : null;
 /** The SDK started and an ad loaded, shared so only one load is ever in flight. */
 let unityReady: Promise<boolean> | null = null;
 
+/** The consent Unity was last told, so a change can throw away an ad loaded under the old one. */
+let toldConsent: boolean | null = null;
+
+function syncConsent(): Promise<void> {
+  if (!unity) return Promise.resolve();
+  const granted = consentGranted();
+  if (granted === toldConsent) return Promise.resolve();
+  const changed = toldConsent !== null;
+  toldConsent = granted;
+  // An ad loaded under the old answer would ignore the new one: load afresh.
+  if (changed) unityReady = null;
+  return unity.sdk.setConsent(granted).catch(() => undefined);
+}
+
+if (unity) {
+  onPrivacyChange(() => {
+    void syncConsent().then(() => prepareUnity());
+  });
+}
+
 function prepareUnity(): Promise<boolean> {
   if (!unity) return Promise.resolve(false);
   if (!unityReady) {
-    unityReady = unity.sdk
-      .initialize(unity.app.gameId, UNITY_TEST_MODE)
+    // Consent first, so even the first ad request carries the player's choice.
+    unityReady = loadPrivacy()
+      .then(syncConsent)
+      .then(() => unity.sdk.initialize(unity.app.gameId, UNITY_TEST_MODE))
       .then(() => unity.sdk.load(unity.app.rewarded))
       .catch(() => false)
       .then((loaded) => {

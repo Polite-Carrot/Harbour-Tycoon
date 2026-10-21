@@ -45,6 +45,16 @@ const config: ExpoConfig = {
     // one-screen app does not use.
     output: 'single',
   },
+  plugins: [
+    [
+      'expo-tracking-transparency',
+      {
+        // The words in Apple's tracking prompt.
+        userTrackingPermission:
+          'This lets the ads you choose to watch be matched to your interests. Ads still play if you say no, just generic ones.',
+      },
+    ],
+  ],
   experiments: {
     baseUrl,
   },

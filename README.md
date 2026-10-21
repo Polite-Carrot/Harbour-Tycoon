@@ -324,6 +324,16 @@ test ad instead. Development builds ask Unity for test ads; release builds
 show real ones (add a phone under Monetization -> Settings -> Test device in
 the Unity dashboard to get test ads on a release build).
 
+**Privacy and Apple's tracking prompt** (`src/privacy/privacy.ts`, the same
+set-up as Color Sort). On first launch a "Before you start" screen links the
+privacy policy (https://politecarrot.com/privacy). Its Continue button brings up
+Apple's App Tracking Transparency prompt on iOS, and allowing it turns
+personalised ads on. Settings → Privacy & Data has a Personalised ads switch.
+Unity is told consent is granted only when that switch is on and, on iOS,
+tracking is allowed (`setUserConsent` / `setUserOptOut`). Otherwise ads still
+play, just generic ones. The prompt's wording is set in `app.config.ts`. The
+choices are kept apart from the save, so a reset never asks again.
+
 Unity's SDK is native code, so it needs a real build rather than Expo Go:
 
 ```bash

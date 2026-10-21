@@ -8,6 +8,8 @@ interface UnityAdsNative {
   /** Resolves false (never throws) when no ad could be loaded. */
   load(placementId: string): Promise<boolean>;
   show(placementId: string): Promise<ShowResult>;
+  /** Personalised ads allowed or not. Set before initialize, and on every change. */
+  setConsent(granted: boolean): Promise<void>;
 }
 
 /**

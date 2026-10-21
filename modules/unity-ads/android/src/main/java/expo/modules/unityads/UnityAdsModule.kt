@@ -15,6 +15,7 @@ import expo.modules.kotlin.modules.ModuleDefinition
  *   initialize(gameId, testMode) -> true once the SDK is ready
  *   load(placementId)            -> true when an ad is ready to show, false if none
  *   show(placementId)            -> "completed" | "skipped" | "failed"
+ *   setConsent(granted)          -> personalised ads allowed or not
  */
 class UnityAdsModule : Module() {
   override fun definition() = ModuleDefinition {
@@ -35,6 +36,13 @@ class UnityAdsModule : Module() {
         override fun onInitializationFailed(error: UnityAds.UnityAdsInitializationError?, message: String?) =
           promise.reject("ERR_UNITY_INIT", message ?: "Unity Ads failed to start", null)
       })
+    }.runOnQueue(Queues.MAIN)
+
+    // granted = the player has personalised ads on. Unity reads it on every
+    // ad request, so it can be set at any time.
+    AsyncFunction("setConsent") { granted: Boolean ->
+      UnityAds.userConsent = granted
+      UnityAds.userOptOut = !granted
     }.runOnQueue(Queues.MAIN)
 
     AsyncFunction("load") { placementId: String, promise: Promise ->

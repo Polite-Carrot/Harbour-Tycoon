@@ -12,6 +12,7 @@ interface Props {
   onReset: () => void;
   /** Play the first-time walkthrough again. */
   onReplayTutorial: () => void;
+  onPrivacy: () => void;
 }
 
 /**
@@ -23,7 +24,7 @@ interface Props {
  * Modal — nested modals are unreliable on react-native-web, and this keeps the
  * destructive action on its own screen where nothing else is tappable.
  */
-export function SettingsModal({ visible, stats, onResume, onReset, onReplayTutorial }: Props) {
+export function SettingsModal({ visible, stats, onResume, onReset, onReplayTutorial, onPrivacy }: Props) {
   const [confirming, setConfirming] = useState(false);
   const sound = useSoundPrefs();
 
@@ -103,6 +104,10 @@ export function SettingsModal({ visible, stats, onResume, onReset, onReplayTutor
               <View style={styles.toggles}>
                 <Toggle label="🎵 Music" on={sound.music} onPress={() => setSoundPrefs({ music: !sound.music })} />
                 <Toggle label="🔊 Sound effects" on={sound.effects} onPress={() => setSoundPrefs({ effects: !sound.effects })} />
+                <Pressable style={styles.toggle} onPress={onPrivacy} accessibilityRole="button" accessibilityLabel="Privacy & Data">
+                  <Text style={styles.toggleLabel}>🔒 Privacy & Data</Text>
+                  <Text style={styles.chevron}>›</Text>
+                </Pressable>
               </View>
 
               <Pressable
@@ -285,6 +290,7 @@ const styles = StyleSheet.create({
   toggles: { gap: 6, marginTop: 4 },
   toggle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 4 },
   toggleLabel: { color: theme.text, fontSize: 14, fontWeight: '700' },
+  chevron: { color: theme.textDim, fontSize: 22, fontWeight: '700', paddingHorizontal: 8 },
   track: { width: 44, height: 26, borderRadius: 13, backgroundColor: theme.disabled, padding: 3 },
   trackOn: { backgroundColor: theme.good },
   knob: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#ffffff' },
