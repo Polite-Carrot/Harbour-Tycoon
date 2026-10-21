@@ -1,0 +1,10 @@
+{
+  "name": "unity-ads",
+  "version": "1.0.0",
+  "description": "Unity Ads rewarded ads for Harbour Tycoon (local Expo module)",
+  "license": "UNLICENSED",
+  "author": "Polite Carrot",
+  "homepage": "https://harbourtycoon.politecarrot.com",
+  "main": "index.ts",
+  "private": true
+}

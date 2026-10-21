@@ -1,0 +1,19 @@
+{
+  "cli": {
+    "version": ">= 16.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "preview": {
+      "distribution": "internal",
+      "env": { "PAGES_BASE_URL": "" }
+    },
+    "production": {
+      "autoIncrement": true,
+      "env": { "PAGES_BASE_URL": "" }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

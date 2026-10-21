@@ -21,8 +21,16 @@ const config: ExpoConfig = {
   userInterfaceStyle: 'dark',
   ios: {
     supportsTablet: true,
+    bundleIdentifier: 'com.politecarrot.harbourtycoon',
+    infoPlist: {
+      // Unity Ads' ad network, so iOS can credit installs from its ads.
+      SKAdNetworkItems: [{ SKAdNetworkIdentifier: '4dzt52r2t5.skadnetwork' }],
+      // No encryption beyond what iOS itself provides (HTTPS).
+      ITSAppUsesNonExemptEncryption: false,
+    },
   },
   android: {
+    package: 'com.politecarrot.harbourtycoon',
     adaptiveIcon: {
       backgroundColor: '#1a88e8',
       foregroundImage: './assets/android-icon-foreground.png',

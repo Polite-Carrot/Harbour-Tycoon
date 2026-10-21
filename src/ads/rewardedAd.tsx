@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { UnityAds } from '../../modules/unity-ads';
+import { UNITY_ADS, UNITY_TEST_MODE, type UnityAdsApp } from './config';
 
 /**
  * Rewarded ads, behind one small interface so the ad network can be swapped
@@ -9,33 +11,85 @@ import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
  * earned the reward; closing early resolves `false`. The game pays out only
  * on `true`.
  *
- * Right now this is a stand-in TEST AD: a countdown screen, clearly labelled,
- * that never contacts an ad network. To go live, replace `TestAd` with a real
- * provider here, e.g.
- *   - native: react-native-google-mobile-ads `RewardedAd` (needs an EAS dev
- *     build, not Expo Go, plus an AdMob account and ad unit id);
- *   - web: an ad network's rewarded-ad API (Google's H5 games ads need an
- *     approved AdSense site, which a github.io address is not).
- * Keep the contract: resolve true only on the network's "reward earned" event.
+ * In the iOS and Android apps this is Unity Ads (modules/unity-ads, IDs in
+ * ./config.ts): the SDK starts at launch, keeps one ad loaded, and loads the
+ * next as soon as one has played. On the web, in Expo Go, and on a platform
+ * with no Unity app set up yet, it is a stand-in TEST AD: a countdown
+ * screen, clearly labelled, that never contacts an ad network.
  */
 
 /** How long the stand-in ad runs before it can be closed with a reward. */
 export const TEST_AD_SECONDS = 15;
 
+const unityApp: UnityAdsApp | null =
+  Platform.OS === 'ios' ? UNITY_ADS.ios : Platform.OS === 'android' ? UNITY_ADS.android : null;
+const unity = UnityAds && unityApp ? { sdk: UnityAds, app: unityApp } : null;
+
+/** The SDK started and an ad loaded, shared so only one load is ever in flight. */
+let unityReady: Promise<boolean> | null = null;
+
+function prepareUnity(): Promise<boolean> {
+  if (!unity) return Promise.resolve(false);
+  if (!unityReady) {
+    unityReady = unity.sdk
+      .initialize(unity.app.gameId, UNITY_TEST_MODE)
+      .then(() => unity.sdk.load(unity.app.rewarded))
+      .catch(() => false)
+      .then((loaded) => {
+        // A failed attempt is forgotten, so the next tap tries again.
+        if (!loaded) unityReady = null;
+        return loaded;
+      });
+  }
+  return unityReady;
+}
+
+async function showUnity(): Promise<boolean> {
+  if (!unity) return false;
+  const loaded = await prepareUnity();
+  if (!loaded) {
+    Alert.alert('No ad right now', 'There is no ad ready to watch. Try again in a minute.');
+    return false;
+  }
+  unityReady = null;
+  try {
+    return (await unity.sdk.show(unity.app.rewarded)) === 'completed';
+  } catch {
+    return false;
+  } finally {
+    // Line the next one up straight away.
+    void prepareUnity();
+  }
+}
+
 export function useRewardedAd() {
   const [open, setOpen] = useState(false);
   const resolver = useRef<((rewarded: boolean) => void) | null>(null);
 
-  const show = useCallback(
-    () =>
-      new Promise<boolean>((resolve) => {
-        // Never stack two ads; a second request just fails.
-        if (resolver.current) return resolve(false);
-        resolver.current = resolve;
-        setOpen(true);
-      }),
-    [],
-  );
+  const busy = useRef(false);
+
+  // Start Unity and load the first ad at launch, so the first tap is quick.
+  useEffect(() => {
+    void prepareUnity();
+  }, []);
+
+  const show = useCallback(async (): Promise<boolean> => {
+    if (unity) {
+      // Never stack two ads; a second request just fails.
+      if (busy.current) return false;
+      busy.current = true;
+      try {
+        return await showUnity();
+      } finally {
+        busy.current = false;
+      }
+    }
+    return new Promise<boolean>((resolve) => {
+      if (resolver.current) return resolve(false);
+      resolver.current = resolve;
+      setOpen(true);
+    });
+  }, []);
 
   const finish = useCallback((rewarded: boolean) => {
     setOpen(false);

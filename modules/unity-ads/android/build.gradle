@@ -1,0 +1,23 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'expo.modules.unityads'
+version = '1.0.0'
+
+android {
+  namespace "expo.modules.unityads"
+  defaultConfig {
+    versionCode 1
+    versionName "1.0.0"
+  }
+}
+
+repositories {
+  mavenCentral()
+}
+
+dependencies {
+  implementation 'com.unity3d.ads:unity-ads:4.21.0'
+}

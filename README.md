@@ -303,6 +303,36 @@ npm run balance    # economy tuning report (see below)
 npm run build:web  # static web bundle into dist/
 ```
 
+## Ads
+
+Every ad in the game is an optional rewarded ad (offline earnings x3, events
+x2, Time Warp, halving research time), all through one hook,
+`src/ads/rewardedAd.tsx`, which pays out only when the ad was watched to the end.
+
+In the iOS and Android apps the ads come from **Unity Ads**, through a small
+local Expo module (`modules/unity-ads`, Swift and Kotlin around Unity's SDK
+4.21). The Game ID and rewarded placement for each platform are in
+`src/ads/config.ts`:
+
+| platform | Game ID | rewarded placement |
+|---|---|---|
+| iOS | 800406628 | BP_Rewarded_iOS |
+| Android | not set up yet | not set up yet |
+
+A platform without IDs, the website and Expo Go show a labelled 15-second
+test ad instead. Development builds ask Unity for test ads; release builds
+show real ones (add a phone under Monetization -> Settings -> Test device in
+the Unity dashboard to get test ads on a release build).
+
+Unity's SDK is native code, so it needs a real build rather than Expo Go:
+
+```bash
+npx eas-cli build --platform ios --profile preview      # installable test build
+npx eas-cli build --platform ios --profile production   # for the App Store
+```
+
+The bundle ID is `com.politecarrot.harbourtycoon` on both platforms (`app.config.ts`).
+
 ## Playing it on GitHub Pages
 
 The site is served straight from `main`, with no GitHub Actions: Settings ->
