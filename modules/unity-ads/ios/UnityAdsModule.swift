@@ -6,6 +6,7 @@ import UnityAds
  *   initialize(gameId, testMode) -> true once the SDK is ready
  *   load(placementId)            -> true when an ad is ready to show, false if none
  *   show(placementId)            -> "completed" | "skipped" | "failed"
+ *   setConsent(granted)          -> personalised ads allowed or not
  *
  * Unity's SDK reports back through delegates, so each call gets a small
  * delegate object that settles its promise exactly once.
@@ -26,6 +27,13 @@ public class UnityAdsModule: Module {
       let delegate = InitDelegate(promise)
       self.initDelegate = delegate
       UnityAds.initialize(gameId, testMode: testMode, initializationDelegate: delegate)
+    }.runOnQueue(.main)
+
+    // granted = the player has personalised ads on AND (on iOS) allowed
+    // tracking. Unity reads it on every ad request, so it can be set at any time.
+    AsyncFunction("setConsent") { (granted: Bool) in
+      UnityAds.setUserConsent(granted)
+      UnityAds.setUserOptOut(!granted)
     }.runOnQueue(.main)
 
     AsyncFunction("load") { (placementId: String, promise: Promise) in

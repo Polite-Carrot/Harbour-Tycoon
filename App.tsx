@@ -25,6 +25,8 @@ import { play, startSound } from './src/audio/sound';
 import { ResearchModal, labIdle } from './src/ui/ResearchModal';
 import { EmpireModal } from './src/ui/EmpireModal';
 import { TUTORIAL, TutorialCard } from './src/ui/Tutorial';
+import { FirstLaunchPrivacy, PrivacyDataModal } from './src/ui/PrivacyModal';
+import { usePrivacy } from './src/privacy/privacy';
 import { today } from './src/state/useGame';
 import { useRewardedAd } from './src/ads/rewardedAd';
 import { TimeWarpButton, TimeWarpModal } from './src/ui/TimeWarp';
@@ -58,6 +60,8 @@ export default function App() {
     setTutorial,
   } = useGame();
   const ad = useRewardedAd();
+  const privacy = usePrivacy();
+  const [privacyOpen, setPrivacyOpen] = useState(false);
   useEffect(() => {
     void startSound();
   }, []);
@@ -201,7 +205,7 @@ export default function App() {
         />
         <TimeWarpButton state={state} day={today()} now={Date.now()} onPress={() => setWarpOpen(true)} />
         <SettingsButton onPress={() => setSettingsOpen(true)} />
-        {!offlineReport && (
+        {!offlineReport && privacy.answered && (
           <TutorialCard
             state={state}
             panelOpen={panelOpen}
@@ -263,7 +267,12 @@ export default function App() {
           setSettingsOpen(false);
           setTutorial(0, false);
         }}
+        onPrivacy={() => {
+          setSettingsOpen(false);
+          setPrivacyOpen(true);
+        }}
       />
+      <PrivacyDataModal privacy={privacy} visible={privacyOpen} onClose={() => setPrivacyOpen(false)} />
 
       <HeadOfficeModal
         visible={officeOpen}
@@ -329,6 +338,8 @@ export default function App() {
         onDismiss={dismissOfflineReport}
         onWatchAd={watchForOfflineBonus}
       />
+      {/* Last, so on first launch it sits over everything, the offline popup included. */}
+      <FirstLaunchPrivacy privacy={privacy} />
       <StatusBar style="dark" />
     </SafeAreaView>
   );
