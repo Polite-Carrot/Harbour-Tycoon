@@ -198,6 +198,14 @@ Anchors buy Legacy upgrades that are never lost, at 1, 2, 3... Anchors a level:
 | 🎓 Research Grants | research 20% faster (compounding) | 4 (~59% faster) |
 | 🌙 Night Watch | offline earnings build up 2h longer | 4 (+8h) |
 
+**Opening screen.** The Polite Carrot intro, the same as Color Sort's
+(`src/ui/BootScreen.tsx`, logos in `assets/brand/`). The phone's own launch
+screen is the carrot on black (`expo-splash-screen` in `app.config.ts`). The
+intro takes over from it: the carrot scales in, "Polite Carrot" slides up
+under it, and the whole thing fades away once the game has loaded (about
+1.3s, never more than 4s). Popups such as "Before you start" and "While you
+were away" wait for it to finish.
+
 **Tutorial.** A brand-new game opens with a seven-step coach card
 (`src/ui/Tutorial.tsx`). Steps that ask the player to do something (buy
 Cranes, buy three more) move on by themselves; the rest have a button.

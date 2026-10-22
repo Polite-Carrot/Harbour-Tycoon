@@ -47,6 +47,17 @@ const config: ExpoConfig = {
   },
   plugins: [
     [
+      // The phone's own launch screen: the Polite Carrot carrot on black,
+      // which the animated intro (src/ui/BootScreen.tsx) then takes over from.
+      'expo-splash-screen',
+      {
+        backgroundColor: '#000000',
+        image: './assets/brand/polite-carrot-logo.png',
+        imageWidth: 220,
+        resizeMode: 'contain',
+      },
+    ],
+    [
       'expo-tracking-transparency',
       {
         // The words in Apple's tracking prompt.
