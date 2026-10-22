@@ -27,6 +27,7 @@ import { EmpireModal } from './src/ui/EmpireModal';
 import { TUTORIAL, TutorialCard } from './src/ui/Tutorial';
 import { FirstLaunchPrivacy, PrivacyDataModal } from './src/ui/PrivacyModal';
 import { usePrivacy } from './src/privacy/privacy';
+import { BootScreen } from './src/ui/BootScreen';
 import { today } from './src/state/useGame';
 import { useRewardedAd } from './src/ads/rewardedAd';
 import { TimeWarpButton, TimeWarpModal } from './src/ui/TimeWarp';
@@ -61,6 +62,10 @@ export default function App() {
   } = useGame();
   const ad = useRewardedAd();
   const privacy = usePrivacy();
+  // The Polite Carrot intro plays over loading; popups wait until it has gone.
+  const [booted, setBooted] = useState(false);
+  // Keyed, so it stays the same instance when the loading screen swaps for the harbour.
+  const boot = booted ? null : <BootScreen key="boot" ready={ready && !!state} onDone={() => setBooted(true)} />;
   const [privacyOpen, setPrivacyOpen] = useState(false);
   useEffect(() => {
     void startSound();
@@ -168,6 +173,7 @@ export default function App() {
       <SafeAreaView style={[styles.screen, styles.centre]}>
         <Text style={styles.dim}>Opening the harbour…</Text>
         <StatusBar style="dark" />
+        {boot}
       </SafeAreaView>
     );
   }
@@ -205,7 +211,7 @@ export default function App() {
         />
         <TimeWarpButton state={state} day={today()} now={Date.now()} onPress={() => setWarpOpen(true)} />
         <SettingsButton onPress={() => setSettingsOpen(true)} />
-        {!offlineReport && privacy.answered && (
+        {booted && !offlineReport && privacy.answered && (
           <TutorialCard
             state={state}
             panelOpen={panelOpen}
@@ -332,15 +338,16 @@ export default function App() {
       {ad.element}
 
       <OfflineModal
-        report={offlineReport}
+        report={booted ? offlineReport : null}
         busy={offlineAdBusy}
         hidden={!!ad.element}
         onDismiss={dismissOfflineReport}
         onWatchAd={watchForOfflineBonus}
       />
       {/* Last, so on first launch it sits over everything, the offline popup included. */}
-      <FirstLaunchPrivacy privacy={privacy} />
-      <StatusBar style="dark" />
+      {booted && <FirstLaunchPrivacy privacy={privacy} />}
+      <StatusBar style={booted ? 'dark' : 'light'} />
+      {boot}
     </SafeAreaView>
   );
 }
