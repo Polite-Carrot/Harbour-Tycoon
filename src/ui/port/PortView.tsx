@@ -15,8 +15,10 @@ export interface PortViewProps {
 }
 
 /**
- * The harbour view. Native draws the flat SVG scene; the web build resolves
- * PortView.web.tsx instead and draws the explorable 3D port.
+ * The harbour view's props, and the flat SVG harbour. The web build resolves
+ * PortView.web.tsx and the apps PortView.native.tsx, which both draw the
+ * explorable 3D port; this flat version is what they fall back to when the
+ * device can't do 3D (and what tests render).
  */
 export function PortView({ warpStartedAt: _warp, lastEventSlot: _event, ...props }: PortViewProps) {
   return <PortScene {...props} />;

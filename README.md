@@ -7,10 +7,13 @@ upgrade you buy shows up in the harbour.
 
 ## The 3D harbour
 
-On the web the port is a full 3D scene (three.js) you can explore:
+On the web and in the iOS and Android apps the port is a full 3D scene
+(three.js) you can explore:
 
-- **Drag** to pan around the port, **scroll / pinch** to zoom, **right-drag /
-  two-finger twist** to orbit. The ⌖ button flies back to the berth.
+- On the web: **drag** to pan around the port, **scroll / pinch** to zoom,
+  **right-drag / two-finger twist** to orbit. In the apps: **drag** to pan,
+  **pinch** to zoom, **twist** to turn, **two fingers up / down** to tilt.
+  The ⌖ button flies back to the berth.
 - **Day and night.** One harbour day lasts 8 real minutes. The sun crosses the
   sky, then dusk, lit windows, street lamps, floodlights, a sweeping lighthouse
   and a moonlit sea. The clock top-left shows the harbour time.
@@ -281,17 +284,18 @@ day of income at once (current rate × 24h) for watching a rewarded ad: up to
 day as it pays out. Rules in `src/sim/timewarp.ts`, tuning in
 `BALANCE.timeWarp`.
 
-The ad itself sits behind `src/ads/rewardedAd.tsx`, which currently shows a
-clearly labelled **test ad** (a 15-second countdown, no ad network). Going
-live means swapping that one file for a real provider, keeping its contract
-(resolve `true` only on the network's "reward earned" event):
-`react-native-google-mobile-ads` for the apps (needs an EAS dev build and an
-AdMob account), or a web rewarded-ad network for the browser build (Google's
-H5 games ads need an approved AdSense site on your own domain).
+The ad itself sits behind `src/ads/rewardedAd.tsx`: Unity Ads in the apps,
+a clearly labelled test ad on the web (see **Ads** below).
 
-Native builds (Expo Go) still draw the flat 2D SVG harbour; `PortView.tsx` /
-`PortView.web.tsx` pick the right one per platform. If a browser cannot create
-a WebGL context, the web build falls back to the 2D scene as well.
+**Same harbour, two renderers.** Everything about the 3D harbour that does
+not depend on the platform (the world, camera limits and flights, sightings,
+the Time Warp sweep, the floating payout) is in `src/ui/port/harbourRuntime.ts`.
+`PortView.web.tsx` draws it into a browser canvas with three.js's MapControls;
+`PortView.native.tsx` draws it through **expo-gl** (a native WebGL2 view) with
+touch controls of its own (`touchRig.ts`, unit-tested). Ship names and the
+cruise-terminal sign are painted on a browser canvas, so the apps leave them
+off. If a device cannot create a GL context, either view falls back to the
+flat 2D SVG harbour (`PortView.tsx`).
 
 Add `?debug` to the URL to expose `window.__harbour` (camera, controls, world)
 for poking at the scene from the browser console.
@@ -403,7 +407,7 @@ src/ads/                Rewarded-ad provider (a test ad for now)
   stats.ts              the summary the settings panel reports
 src/state/              Persistence and the React lifecycle wiring
 src/ui/                 Presentation
-  port/                 Harbour views: PortView picks 3D (web) or 2D SVG (native)
+  port/                 Harbour views: 3D on web (PortView.web) and in the apps (PortView.native), 2D SVG fallback
     timeline.ts         Berth cycle -> ship/cargo/payout at any instant
     daylight.ts         Day/night clock and sky colours (pure, tested)
   port3d/               The three.js harbour: world, sky, water, ship, crane, land,
